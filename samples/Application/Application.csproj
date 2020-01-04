@@ -12,9 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="BackEnd\BackEnd.csproj" />
-    <ProjectReference Include="FrontEnd\FrontEnd.csproj" />
-    <ProjectReference Include="Worker\Worker.csproj" />
+    <ProjectReference Include="*\*.csproj" />
   </ItemGroup>
 
 </Project>
