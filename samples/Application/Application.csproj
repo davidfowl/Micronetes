@@ -9,7 +9,6 @@
     <Content Remove="*\**" />
     <EmbeddedResource Remove="*\**" />
     <None Remove="*\**" />
-    <Projects Include="**\*.csproj" />
   </ItemGroup>
 
   <ItemGroup>
