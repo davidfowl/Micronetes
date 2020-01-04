@@ -24,7 +24,7 @@ namespace Worker
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var queue = _channelFactory.CreateClient("orders");
+            var queue = _channelFactory.CreateClient("queue/orders");
 
             await foreach (var data in queue.Reader.ReadAllAsync(stoppingToken))
             {

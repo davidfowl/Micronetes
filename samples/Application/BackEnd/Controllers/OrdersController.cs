@@ -1,14 +1,9 @@
-﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
+﻿using System.Buffers;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Micronetes;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace BackEnd.Controllers
 {
@@ -19,7 +14,7 @@ namespace BackEnd.Controllers
         [HttpPost]
         public async Task Post([FromServices]IClientFactory<Channel<byte[]>> channelFactory)
         {
-            var orders = channelFactory.CreateClient("orders");
+            var orders = channelFactory.CreateClient("queue/orders");
 
             var reader = Request.BodyReader;
             while (true)

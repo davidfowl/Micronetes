@@ -14,6 +14,8 @@ namespace Micronetes
 
         public static IServiceCollection AddMicronetes(this IServiceCollection services)
         {
+            services.AddSingleton(typeof(IClientFactory<>), typeof(DefaultClientFactory<>));
+
             if (IsInCluster())
             {
                 services.AddSingleton<IClientFactory<PubSubClient>, HttpPubSubClientFactory>();
@@ -25,7 +27,6 @@ namespace Micronetes
                 services.AddSingleton<IClientFactory<PubSubClient>, PubSubClientFactory>();
                 services.AddSingleton<IClientFactory<Channel<byte[]>>, ChannelFactory>();
                 services.AddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
-                services.AddSingleton(typeof(IClientFactory<>), typeof(RpcClientFactory<>));
                 services.AddSingleton(HttpServiceRegistry.Default);
                 services.AddHostedService<ServiceRegistrationHostedService>();
             }
