@@ -28,9 +28,34 @@ namespace Application
 
         public static Application App = new Application(new[]
             {
-                new ServiceDescription{ Name = "FrontEnd", HasAddresses = true  },
-                new ServiceDescription{ Name = "BackEnd", HasAddresses = true  },
-                new ServiceDescription{ Name = "Worker" }
+                new ServiceDescription {
+                    Name = "FrontEnd",
+                    HasAddresses = true,
+                    Exposed = new List<string> 
+                    {
+                        "HTTP"
+                    }
+                },
+                new ServiceDescription {
+                    Name = "BackEnd",
+                    HasAddresses = true,
+                    Exposed = new List<string>
+                    {
+                        "HTTP"
+                    }
+                },
+                new ServiceDescription {
+                    Name = "Worker",
+                    HasAddresses = false,
+                },
+                new ServiceDescription {
+                    Name = "MQ",
+                    External = true,
+                    Exposed = new List<string>
+                    {
+                        "Queue"
+                    }
+                }
             });
 
         public static async Task Main(string[] args)
@@ -89,7 +114,7 @@ namespace Application
                                      await JsonSerializer.SerializeAsync(context.Response.Body, new
                                      {
                                          message = $"Unknown service {name}"
-                                     }, 
+                                     },
                                      options);
 
                                      return;
@@ -111,7 +136,7 @@ namespace Application
                                     await JsonSerializer.SerializeAsync(context.Response.Body, new
                                     {
                                         message = $"Unknown service {name}"
-                                    }, 
+                                    },
                                     options);
 
                                     return;
@@ -165,9 +190,14 @@ namespace Application
         {
             foreach (var s in services.Values)
             {
+                if (s.Pid == null)
+                {
+                    continue;
+                }
+
                 try
                 {
-                    ProcessUtil.StopProcess(Process.GetProcessById(s.Pid));
+                    ProcessUtil.StopProcess(Process.GetProcessById(s.Pid.Value));
                 }
                 catch (Exception)
                 {
@@ -199,7 +229,7 @@ namespace Application
             var index = 0;
             foreach (var s in App.Services)
             {
-                tasks[index++] = LaunchOne(s.Value, args);
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchOne(s.Value, args);
             }
 
             return Task.WhenAll(tasks);
@@ -290,15 +320,17 @@ namespace Application
         {
             public string Name { get; set; }
             public bool HasAddresses { get; set; }
+            public bool External { get; set; }
+            public List<string> Exposed { get; set; } = new List<string>();
         }
 
         public class Service
         {
             public ServiceDescription Description { get; set; }
 
-            public int Pid { get; set; }
+            public int? Pid { get; set; }
 
-            public string State => Thread?.ThreadState.ToString() ?? "Running";
+            public string State => "Running";
 
             [JsonIgnore]
             public Thread Thread { get; set; }
@@ -320,7 +352,7 @@ namespace Application
                 {
                     Services[s.Name] = new Service
                     {
-                        Pid = Process.GetCurrentProcess().Id,
+                        Pid = s.External ? (int?)null : Process.GetCurrentProcess().Id,
                         Description = s
                     };
 
