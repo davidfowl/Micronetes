@@ -35,6 +35,11 @@ namespace Application
 
         public static async Task Main(string[] args)
         {
+            var options = new JsonSerializerOptions()
+            {
+
+            };
+
             if (File.Exists(ServicesPath))
             {
                 var old = File.ReadAllText(ServicesPath);
@@ -56,9 +61,10 @@ namespace Application
                                 context.Response.ContentType = "application/json";
                                 return JsonSerializer.SerializeAsync(context.Response.Body, new[]
                                 {
-                                    "/api/v1/services",
-                                    "/api/v1/logs/{service}",
-                                });
+                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/services",
+                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/logs/{{service}}",
+                                },
+                                options);
                             });
 
                             endpoints.MapGet("/api/v1/services", async context =>
@@ -66,7 +72,8 @@ namespace Application
                                 await App.Intialized;
 
                                 context.Response.ContentType = "application/json";
-                                await JsonSerializer.SerializeAsync(context.Response.Body, App.Services);
+
+                                await JsonSerializer.SerializeAsync(context.Response.Body, App.Services, options);
                             });
 
                             endpoints.MapGet("/api/v1/services/{name}", async context =>
@@ -75,7 +82,20 @@ namespace Application
 
                                  var name = (string)context.Request.RouteValues["name"];
                                  context.Response.ContentType = "application/json";
-                                 await JsonSerializer.SerializeAsync(context.Response.Body, App.Services[name]);
+
+                                 if (!App.Services.TryGetValue(name, out var service))
+                                 {
+                                     context.Response.StatusCode = 404;
+                                     await JsonSerializer.SerializeAsync(context.Response.Body, new
+                                     {
+                                         message = $"Unknown service {name}"
+                                     }, 
+                                     options);
+
+                                     return;
+                                 }
+
+                                 await JsonSerializer.SerializeAsync(context.Response.Body, service, options);
                              });
 
                             endpoints.MapGet("/api/v1/logs/{name}", async context =>
@@ -84,7 +104,20 @@ namespace Application
 
                                 var name = (string)context.Request.RouteValues["name"];
                                 context.Response.ContentType = "application/json";
-                                await JsonSerializer.SerializeAsync(context.Response.Body, App.Services[name].Logs);
+
+                                if (!App.Services.TryGetValue(name, out var service))
+                                {
+                                    context.Response.StatusCode = 404;
+                                    await JsonSerializer.SerializeAsync(context.Response.Body, new
+                                    {
+                                        message = $"Unknown service {name}"
+                                    }, 
+                                    options);
+
+                                    return;
+                                }
+
+                                await JsonSerializer.SerializeAsync(context.Response.Body, service.Logs, options);
                             });
                         });
                     });
@@ -145,8 +178,9 @@ namespace Application
 
         private static Task LaunchInProcess(string[] args)
         {
-            Environment.SetEnvironmentVariable("API_SERVER", "http://localhost:5000");
-            Environment.SetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES", "Application");
+            // Not needed for in process but helps with debugging
+            // Environment.SetEnvironmentVariable("API_SERVER", "http://localhost:5000");
+            // Environment.SetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES", "Application");
 
             var tasks = new[]
             {
@@ -179,15 +213,14 @@ namespace Application
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             var env = new Dictionary<string, string>
             {
-                { "SERVICES_PATH", ServicesPath },
-                { "API_SERVER", "http://localhost:5000" }
+                { "API_SERVER", "https://localhost:5001" }
             };
 
             var thread = new Thread(() =>
             {
                 try
                 {
-                    ProcessUtil.Run(path, string.Join(" ", DefineService(args, serviceName)), 
+                    ProcessUtil.Run(path, string.Join(" ", DefineService(args, serviceName)),
                         environmentVariables: env,
                         workingDirectory: Path.Combine(Directory.GetCurrentDirectory(), serviceName),
                         outputDataReceived: data =>
@@ -199,7 +232,7 @@ namespace Application
 
                             if (serviceDescription.HasAddresses)
                             {
-                                // Now listening on: http://127.0.0.1:5561
+                                // Now listening on: "{url}"
                                 var line = data.Trim();
                                 if (line.StartsWith("Now listening on") && line.IndexOf("http") >= 0)
                                 {
