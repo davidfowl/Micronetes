@@ -10,15 +10,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Application;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-
-[assembly: HostingStartup(typeof(Initializer))]
+using Microsoft.Extensions.Logging;
 
 namespace Application
 {
@@ -30,15 +26,21 @@ namespace Application
             {
                 new ServiceDescription {
                     Name = "FrontEnd",
-                    HasAddresses = true,
-                    Exposed = new List<string> 
+                    Addresses = new List<string>
+                    {
+                        "http://localhost:7000",
+                    },
+                    Exposed = new List<string>
                     {
                         "HTTP"
                     }
                 },
                 new ServiceDescription {
                     Name = "BackEnd",
-                    HasAddresses = true,
+                    Addresses = new List<string>
+                    {
+                        "http://localhost:8000",
+                    },
                     Exposed = new List<string>
                     {
                         "HTTP"
@@ -46,7 +48,6 @@ namespace Application
                 },
                 new ServiceDescription {
                     Name = "Worker",
-                    HasAddresses = false,
                 },
                 new ServiceDescription {
                     Name = "MQ",
@@ -64,13 +65,6 @@ namespace Application
             {
 
             };
-
-            if (File.Exists(ServicesPath))
-            {
-                var old = File.ReadAllText(ServicesPath);
-                var oldServices = JsonSerializer.Deserialize<Dictionary<string, Service>>(old);
-                KillRunningProcesses(oldServices);
-            }
 
             var host = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(web =>
@@ -149,21 +143,18 @@ namespace Application
                 })
                 .Build();
 
+            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+
             await host.StartAsync();
 
             try
             {
                 // await LaunchInProcess(args);
-                await LaunchOutOfProcess(args);
+                await LaunchOutOfProcess(logger, args);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
-            }
-            finally
-            {
-                var state = JsonSerializer.Serialize(App.Services);
-                File.WriteAllText(ServicesPath, state);
             }
 
             AssemblyLoadContext.Default.Unloading += _ =>
@@ -182,8 +173,11 @@ namespace Application
             {
                 Console.WriteLine(ex);
             }
+            finally
+            {
+                KillRunningProcesses(App.Services);
+            }
 
-            KillRunningProcesses(App.Services);
         }
 
         private static void KillRunningProcesses(IDictionary<string, Service> services)
@@ -214,28 +208,28 @@ namespace Application
 
             var tasks = new[]
             {
-                FrontEnd.Program.Main(DefineService(args, "FrontEnd")),
-                BackEnd.Program.Main(DefineService(args, "BackEnd")),
-                Worker.Program.Main(DefineService(args, "Worker"))
+                FrontEnd.Program.Main(DefineService(args, App.Services["FrontEnd"])),
+                BackEnd.Program.Main(DefineService(args, App.Services["BackEnd"])),
+                Worker.Program.Main(DefineService(args, App.Services["Worker"]))
             };
 
             return Task.CompletedTask;
         }
 
-        private static Task LaunchOutOfProcess(string[] args)
+        private static Task LaunchOutOfProcess(ILogger logger, string[] args)
         {
             // Locate executable how?
             var tasks = new Task[App.Services.Count];
             var index = 0;
             foreach (var s in App.Services)
             {
-                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchOne(s.Value, args);
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(logger, s.Value, args);
             }
 
             return Task.WhenAll(tasks);
         }
 
-        private static Task LaunchOne(Service service, string[] args)
+        private static Task LaunchService(ILogger logger, Service service, string[] args)
         {
             var serviceDescription = service.Description;
             var serviceName = serviceDescription.Name;
@@ -248,9 +242,12 @@ namespace Application
 
             var thread = new Thread(() =>
             {
+                logger.LogInformation("Launching service {ServiceName} on thread {ThreadId}", serviceName, Thread.CurrentThread.ManagedThreadId);
+
+                ProcessResult result = null;
                 try
                 {
-                    ProcessUtil.Run(path, string.Join(" ", DefineService(args, serviceName)),
+                    result = ProcessUtil.Run(path, string.Join(" ", DefineService(args, service)),
                         environmentVariables: env,
                         workingDirectory: Path.Combine(Directory.GetCurrentDirectory(), serviceName),
                         outputDataReceived: data =>
@@ -267,11 +264,12 @@ namespace Application
                                 if (line.StartsWith("Now listening on") && line.IndexOf("http") >= 0)
                                 {
                                     var addressIndex = line.IndexOf("http");
-                                    service.Addresses.Add(line.Substring(addressIndex).Trim());
 
                                     App.ServiceBound();
 
                                     tcs.TrySetResult(null);
+
+                                    logger.LogInformation("{ServiceName} bound", serviceName);
                                 }
                             }
 
@@ -279,16 +277,28 @@ namespace Application
                         },
                         onStart: pid =>
                         {
+                            logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+
                             service.Pid = pid;
+
                             if (!serviceDescription.HasAddresses)
                             {
                                 tcs.TrySetResult(null);
                             }
-                        });
+                        },
+                        throwOnError: false);
+
+                    service.ExitCode = result.ExitCode;
                 }
                 catch (Exception)
                 {
 
+                }
+                finally
+                {
+                    logger.LogInformation("{ServiceName} process exited", serviceName);
+
+                    tcs.TrySetResult(null);
                 }
             });
 
@@ -304,11 +314,19 @@ namespace Application
             return Path.Combine(Directory.GetCurrentDirectory(), serviceName, "bin", "Debug", "netcoreapp3.1", serviceName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : ""));
         }
 
-        private static string[] DefineService(string[] args, string serviceName)
+        private static string[] DefineService(string[] args, Service service)
         {
-            var path = Path.Combine(Directory.GetCurrentDirectory(), serviceName);
+            var path = Path.Combine(Directory.GetCurrentDirectory(), service.Description.Name);
 
-            return CombineArgs(args, $"--urls=http://127.0.0.1:0", $"--contentRoot={path}");
+            if (service.Description.HasAddresses)
+            {
+                var moreArgs = service.Description.Addresses.Select(a => $"--urls={a}");
+
+                var s = args.Concat(new[] { $"--contentRoot={path}" }).Concat(moreArgs).ToArray();
+                return s;
+            }
+
+            return CombineArgs(args, $"--contentRoot={path}");
         }
 
         private static string[] CombineArgs(string[] args, params string[] newArgs)
@@ -319,9 +337,10 @@ namespace Application
         public class ServiceDescription
         {
             public string Name { get; set; }
-            public bool HasAddresses { get; set; }
+            public bool HasAddresses => Addresses.Count > 0;
             public bool External { get; set; }
             public List<string> Exposed { get; set; } = new List<string>();
+            public List<string> Addresses { get; set; } = new List<string>();
         }
 
         public class Service
@@ -330,7 +349,7 @@ namespace Application
 
             public int? Pid { get; set; }
 
-            public string State => "Running";
+            public string State => ExitCode == null ? "Running" : "Stopped";
 
             [JsonIgnore]
             public Thread Thread { get; set; }
@@ -338,7 +357,7 @@ namespace Application
             [JsonIgnore]
             public List<string> Logs { get; } = new List<string>();
 
-            public List<string> Addresses { get; } = new List<string>();
+            public int? ExitCode { get; set; }
         }
 
         public class Application
@@ -373,45 +392,6 @@ namespace Application
                 {
                     _tcs.TrySetResult(null);
                 }
-            }
-        }
-    }
-
-    public class Initializer : IHostingStartup
-    {
-        public void Configure(IWebHostBuilder builder)
-        {
-            builder.ConfigureServices((context, services) =>
-            {
-                services.AddHostedService<BoostrapHostedService>();
-            });
-        }
-
-        private class BoostrapHostedService : IHostedService
-        {
-            public BoostrapHostedService(IHostApplicationLifetime lifetime, IServer server, IHostEnvironment environment)
-            {
-                lifetime.ApplicationStarted.Register(() =>
-                {
-                    var addresses = server.Features.Get<IServerAddressesFeature>();
-                    var app = Program.App;
-                    var services = app.Services;
-                    if (services.ContainsKey(environment.ApplicationName))
-                    {
-                        services[environment.ApplicationName].Addresses.AddRange(addresses.Addresses);
-                        app.ServiceBound();
-                    }
-                });
-            }
-
-            public Task StartAsync(CancellationToken cancellationToken)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task StopAsync(CancellationToken cancellationToken)
-            {
-                return Task.CompletedTask;
             }
         }
     }

@@ -38,7 +38,7 @@ namespace Micronetes
             var url = _configuration["API_SERVER"];
 
             // No API server means we're running in process, register ourself app domain wide
-            _lifetime.ApplicationStarted.Register(async () =>
+            _lifetime.ApplicationStarted.Register(() =>
             {
                 if (string.IsNullOrEmpty(url))
                 {
@@ -54,24 +54,30 @@ namespace Micronetes
                 else
                 {
                     // The API server has all names and addresses
-                    var client = new HttpClient()
-                    {
-                        BaseAddress = new Uri(url)
-                    };
-
-                    var response = await client.GetAsync("/api/v1/services");
-                    response.EnsureSuccessStatusCode();
-
-                    var services = await JsonSerializer.DeserializeAsync<JsonElement>(await response.Content.ReadAsStreamAsync());
-                    foreach (var e in services.EnumerateObject())
-                    {
-                        var addresses = e.Value.GetProperty("Addresses").EnumerateArray().Select(e => e.GetString());
-                        _serviceRegistry.RegisterAddress(e.Name, addresses);
-                    }
+                    // This is async void... so a really bad idea but we need to do async work
+                    _ = PopulateServiceRegistryAsync(url);
                 }
             });
 
             return Task.CompletedTask;
+        }
+
+        private async Task PopulateServiceRegistryAsync(string url)
+        {
+            var client = new HttpClient()
+            {
+                BaseAddress = new Uri(url)
+            };
+
+            var response = await client.GetAsync("/api/v1/services");
+            response.EnsureSuccessStatusCode();
+
+            var services = await JsonSerializer.DeserializeAsync<JsonElement>(await response.Content.ReadAsStreamAsync());
+            foreach (var e in services.EnumerateObject())
+            {
+                var addresses = e.Value.GetProperty("Description").GetProperty("Addresses").EnumerateArray().Select(e => e.GetString());
+                _serviceRegistry.RegisterAddress(e.Name, addresses);
+            }
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
