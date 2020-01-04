@@ -11,9 +11,9 @@ namespace Micronetes
             // REVIEW: This could also launch 3 processes
             var tasks = new[]
             {
-                new FrontEnd.FrontendApplication().RunAsync(DefineService(args, "FrontEnd")),
-                new BackEnd.BackendApplication().RunAsync(DefineService(args, "BackEnd")),
-                new Worker.WorkerApplication().RunAsync(DefineService(args, "Worker"))
+                FrontEnd.Program.Main(DefineService(args, "FrontEnd")),
+                BackEnd.Program.Main(DefineService(args, "BackEnd")),
+                Worker.Program.Main(DefineService(args, "Worker"))
             };
 
             Task.WaitAll(tasks);
@@ -23,7 +23,7 @@ namespace Micronetes
         {
             var path = Path.Combine(Directory.GetCurrentDirectory(), serviceName);
 
-            return CombineArgs(args, $"--service={serviceName}", "--urls=http://127.0.0.1:0", $"--contentRoot={path}");
+            return CombineArgs(args, $"--urls=http://127.0.0.1:0", $"--contentRoot={path}");
         }
 
         private static string[] CombineArgs(string[] args, params string[] newArgs)

@@ -3,11 +3,11 @@ using Micronetes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 
-namespace FrontEnd
+namespace BackEnd
 {
-    public class FrontendApplication
+    public class Program
     {
-        public Task RunAsync(string[] args)
+        public static Task Main(string[] args)
         {
             return Host.CreateDefaultBuilder(args)
                 .ConfigureServices(services =>
@@ -16,7 +16,7 @@ namespace FrontEnd
                 })
                 .ConfigureWebHostDefaults(web =>
                 {
-                    web.UseStartup<FrontEnd.Startup>();
+                    web.UseStartup<Startup>();
                 })
                 .Build()
                 .RunAsync();

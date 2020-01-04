@@ -25,8 +25,7 @@ namespace Micronetes
                     var serverAddresses = server.Features.Get<IServerAddressesFeature>();
                     if (serverAddresses != null)
                     {
-                        var name = configuration["service"] ?? environment.ApplicationName;
-                        serviceRegistry.RegisterAddress(name, serverAddresses.Addresses.FirstOrDefault());
+                        serviceRegistry.RegisterAddress(environment.ApplicationName, serverAddresses.Addresses.FirstOrDefault());
                     }
                 }
             });

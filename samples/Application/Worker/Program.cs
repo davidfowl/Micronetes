@@ -10,9 +10,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Worker
 {
-    public class WorkerApplication
+    public class Program
     {
-        public Task RunAsync(string[] args)
+        public static Task Main(string[] args)
         {
             return Host.CreateDefaultBuilder(args)
                        .ConfigureServices(services =>
