@@ -12,9 +12,9 @@ namespace Micronetes
 
         private readonly ConcurrentDictionary<string, string> _clients = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        public void RegisterAddress(string name, string address)
+        public void RegisterAddress(string name, IEnumerable<string> address)
         {
-            _clients.TryAdd(name, address);
+            _clients.TryAdd(name, address.FirstOrDefault());
         }
 
         public bool TryGetValue(string name, out string address)
