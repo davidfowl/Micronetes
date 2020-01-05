@@ -234,7 +234,7 @@ namespace Application
 
             var thread = new Thread(() =>
             {
-                logger.LogInformation("Launching service {ServiceName} on thread {ThreadId}", serviceName, Thread.CurrentThread.ManagedThreadId);
+                logger.LogInformation("Launching service {ServiceName}", serviceName);
 
                 ProcessResult result = null;
                 try
@@ -253,7 +253,16 @@ namespace Application
                         },
                         onStart: pid =>
                         {
-                            logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                            var defaultBinding = service.Description.DefaultBinding;
+
+                            if (defaultBinding == null)
+                            {
+                                logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                            }
+                            else
+                            {
+                                logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
+                            }
 
                             service.Pid = pid;
 
@@ -333,6 +342,8 @@ namespace Application
             public string Name { get; set; }
             public bool External { get; set; }
             public List<Binding> Bindings { get; set; } = new List<Binding>();
+
+            internal Binding DefaultBinding => Bindings.FirstOrDefault(b => b.IsDefault);
         }
 
         public class Binding
