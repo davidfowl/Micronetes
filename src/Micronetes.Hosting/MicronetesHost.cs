@@ -28,7 +28,7 @@ namespace Micronetes.Hosting
             };
 
             using var host = Host.CreateDefaultBuilder(args)
-                .UseSerilog((context, configuration)=>
+                .UseSerilog((context, configuration) =>
                 {
                     configuration
                         .Filter.ByExcluding(Matching.FromSource("Microsoft"))
@@ -113,12 +113,14 @@ namespace Micronetes.Hosting
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
+            var target = GetTarget(args, logger);
 
             lifetime.ApplicationStopping.Register(() =>
             {
                 logger.LogInformation("Shutting down...");
 
-                KillRunningProcesses(application.Services);
+                // Yikes...
+                target.StopAsync(application).Wait();
             });
 
             await host.StartAsync();
@@ -127,14 +129,7 @@ namespace Micronetes.Hosting
 
             try
             {
-                if (args.Contains("--k8s") || args.Contains("--kubernetes"))
-                {
-                    await LaunchApplcationInK8s(application, logger);
-                }
-                else
-                {
-                    await LaunchApplication(application, logger);
-                }
+                await target.StartAsync(application);
             }
             catch (Exception ex)
             {
@@ -144,30 +139,13 @@ namespace Micronetes.Hosting
             await host.WaitForShutdownAsync();
         }
 
-        private static void PopulateEnvironment(Application application, Service service, IDictionary<string, string> environment)
+        private static IExecutionTarget GetTarget(string[] args, Microsoft.Extensions.Logging.ILogger logger)
         {
-            foreach (var s in application.Services.Values)
+            if (args.Contains("--k8s") || args.Contains("--kubernetes"))
             {
-                if (s == service)
-                {
-                    continue;
-                }
-
-                foreach (var b in s.Description.Bindings)
-                {
-                    string bindingName;
-                    if (b.IsDefault)
-                    {
-                        bindingName = $"{s.Description.Name.ToUpper()}_SERVICE";
-                    }
-                    else
-                    {
-                        bindingName = $"{s.Description.Name.ToUpper()}_{b.Name.ToUpper()}_SERVICE";
-                    }
-                    environment[bindingName] = b.Address;
-                    environment[$"{bindingName}_PROTOCOL"] = b.Protocol;
-                }
+                return new KubernetesExecutionTarget(logger);
             }
+            return new OutOfProcessExecutionTarget(logger);
         }
     }
 }

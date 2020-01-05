@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -11,21 +11,34 @@ using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
-    public partial class MicronetesHost
+    public class OutOfProcessExecutionTarget : IExecutionTarget
     {
-        private static Task LaunchApplication(Application application, ILogger logger)
+        private readonly ILogger _logger;
+
+        public OutOfProcessExecutionTarget(ILogger logger)
+        {
+            _logger = logger;
+        }
+
+        public Task StartAsync(Application application)
         {
             var tasks = new Task[application.Services.Count];
             var index = 0;
             foreach (var s in application.Services)
             {
-                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, logger, s.Value);
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, s.Value);
             }
 
             return Task.WhenAll(tasks);
         }
 
-        private static Task LaunchService(Application application, ILogger logger, Service service)
+        public Task StopAsync(Application application)
+        {
+            return KillRunningProcesses(application.Services);
+        }
+
+
+        private Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
             var serviceName = serviceDescription.Name;
@@ -33,11 +46,11 @@ namespace Micronetes.Hosting
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             var environment = new Dictionary<string, string>();
 
-            PopulateEnvironment(application, service, environment);
+            application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
             service.Thread = new Thread(() =>
             {
-                logger.LogInformation("Launching service {ServiceName}", serviceName);
+                _logger.LogInformation("Launching service {ServiceName}", serviceName);
 
                 try
                 {
@@ -59,11 +72,11 @@ namespace Micronetes.Hosting
 
                             if (defaultBinding == null)
                             {
-                                logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                                _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
                             }
                             else
                             {
-                                logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
+                                _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
                             }
 
                             service.Pid = pid;
@@ -76,11 +89,11 @@ namespace Micronetes.Hosting
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(0, ex, "{ServiceName} Failed to launch", serviceName);
+                    _logger.LogError(0, ex, "{ServiceName} Failed to launch", serviceName);
                 }
                 finally
                 {
-                    logger.LogInformation("{ServiceName} process exited", serviceName);
+                    _logger.LogInformation("{ServiceName} process exited", serviceName);
 
                     tcs.TrySetResult(null);
                 }
@@ -91,7 +104,7 @@ namespace Micronetes.Hosting
             return tcs.Task;
         }
 
-        private static void KillRunningProcesses(IDictionary<string, Service> services)
+        private Task KillRunningProcesses(IDictionary<string, Service> services)
         {
             static void KillProcess(int? pid)
             {
@@ -118,7 +131,7 @@ namespace Micronetes.Hosting
                 tasks[index++] = Task.Run(() => KillProcess(pid));
             }
 
-            Task.WaitAll(tasks);
+            return Task.WhenAll(tasks);
         }
 
         private static string GetExePath(string serviceName)

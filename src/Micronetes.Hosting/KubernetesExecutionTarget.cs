@@ -11,14 +11,21 @@ using Microsoft.Rest;
 
 namespace Micronetes.Hosting
 {
-    public partial class MicronetesHost
+    public class KubernetesExecutionTarget : IExecutionTarget
     {
-        private static async Task LaunchApplcationInK8s(Application application, ILogger logger)
+        private readonly ILogger _logger;
+
+        public KubernetesExecutionTarget(ILogger logger)
+        {
+            _logger = logger;
+        }
+
+        public async Task StartAsync(Application application)
         {
             var config = KubernetesClientConfiguration.BuildDefaultConfig();
             var klient = new Kubernetes(config);
 
-            logger.LogInformation("Using k8s context: " + config.CurrentContext);
+            _logger.LogInformation("Using k8s context: " + config.CurrentContext);
 
             foreach (var s in application.Services.Values)
             {
@@ -138,16 +145,61 @@ namespace Micronetes.Hosting
             }
         }
 
+        public async Task StopAsync(Application application)
+        {
+            var config = KubernetesClientConfiguration.BuildDefaultConfig();
+            var klient = new Kubernetes(config);
+
+            foreach (var s in application.Services.Values)
+            {
+                var description = s.Description;
+
+                // Skip external resources
+                if (description.External)
+                {
+                    continue;
+                }
+
+                if (description.Bindings.Count > 0)
+                {
+                    try
+                    {
+                        await klient.DeleteNamespacedServiceWithHttpMessagesAsync(description.Name.ToLower(), "default");
+                    }
+                    catch (HttpOperationException ex)
+                    {
+                        if (ex.Response.StatusCode != HttpStatusCode.NotFound)
+                        {
+                            throw;
+                        }
+                    }
+                }
+
+                // Create a deployment
+
+                try
+                {
+                    await klient.DeleteNamespacedDeploymentAsync(description.Name.ToLower(), "default");
+                }
+                catch (HttpOperationException ex)
+                {
+                    if (ex.Response.StatusCode != HttpStatusCode.NotFound)
+                    {
+                        throw;
+                    }
+                }
+            }
+        }
+
         private static IList<V1EnvVar> BuildEnvironment(Application application, Service service)
         {
-            var environment = new Dictionary<string, string>();
-            PopulateEnvironment(application, service, environment);
-
             var env = new List<V1EnvVar>();
-            foreach (var pair in environment)
+
+            application.PopulateEnvironment(service, (k, v) =>
             {
-                env.Add(new V1EnvVar(pair.Key, pair.Value));
-            }
+                env.Add(new V1EnvVar(k, v));
+            });
+
             return env;
         }
 
