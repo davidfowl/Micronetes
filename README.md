@@ -59,7 +59,7 @@ Redis
 
 Database 
  - (default, mongodb://localhost, mongodb)
- - (default, Data Source=.;Initial Catalog=DB name;Integrated Security=True;MultipleActiveResultSets=True, sqlserver)
+ - (sql, Data Source=.;Initial Catalog=DB name;Integrated Security=True;MultipleActiveResultSets=True, sqlserver)
 
 ```
 
