@@ -9,35 +9,28 @@ namespace Micronetes
     {
         private readonly ConcurrentDictionary<string, ConnectionMultiplexer> _clients = new ConcurrentDictionary<string, ConnectionMultiplexer>();
 
-        private readonly IConfiguration _configuration;
+        private readonly INameResolver _nameResolver;
 
-        public StackExchangeRedisClientFactory(IConfiguration configuration)
+        public StackExchangeRedisClientFactory(INameResolver nameResolver)
         {
-            _configuration = configuration;
+            _nameResolver = nameResolver;
         }
 
         public ConnectionMultiplexer CreateClient(string name)
         {
             // REVIEW: Settings options configuration from where?
 
-            var serviceAddress = _configuration[$"{name.ToUpper()}_SERVICE"];
+            var binding = _nameResolver.GetBinding(name);
 
-            if (string.IsNullOrEmpty(serviceAddress))
+            if (!string.Equals("redis", binding.Protocol, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException($"No such http service {name}");
-            }
-
-            var protocol = _configuration[$"{name.ToUpper()}_SERVICE_PROTOCOL"];
-
-            if (!string.Equals("redis", protocol, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"Unsupported protocol {protocol}");
+                throw new InvalidOperationException($"Unsupported protocol {binding.Protocol}");
             }
 
             return _clients.GetOrAdd(name, n =>
             {
                 // REVIEW: What about async? Do we make sure that clients all have a an explicit Connect
-                return ConnectionMultiplexer.Connect(serviceAddress);
+                return ConnectionMultiplexer.Connect(binding.Address);
             });
         }
     }
