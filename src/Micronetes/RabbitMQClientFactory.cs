@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 
 namespace Micronetes
@@ -8,32 +7,24 @@ namespace Micronetes
     internal class RabbitMQClientFactory : IClientFactory<IModel>
     {
         private readonly ConcurrentDictionary<string, IModel> _clients = new ConcurrentDictionary<string, IModel>(StringComparer.OrdinalIgnoreCase);
-        private readonly IConfiguration _configuration;
+        private readonly INameResolver _nameResolver;
 
-        public RabbitMQClientFactory(IConfiguration configuration)
+        public RabbitMQClientFactory(INameResolver nameResolver)
         {
-            _configuration = configuration;
+            _nameResolver = nameResolver;
         }
 
         public IModel CreateClient(string name)
         {
-            // REVIEW: Settings options configuration from where?
-            var serviceAddress = _configuration[$"{name.ToUpper()}_SERVICE"];
+            var binding = _nameResolver.GetBinding(name);
 
-            if (string.IsNullOrEmpty(serviceAddress))
+            if (!string.Equals("rabbitmq", binding.Protocol, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException($"No such http service {name}");
-            }
-
-            var protocol = _configuration[$"{name.ToUpper()}_SERVICE_PROTOCOL"];
-
-            if (!string.Equals("rabbitmq", protocol, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new NotSupportedException($"Unsupported protocol {protocol}");
+                throw new NotSupportedException($"Unsupported protocol {binding.Protocol}");
             }
 
             // This should be host:port
-            var uri = new Uri($"amqp://{serviceAddress}");
+            var uri = new Uri($"amqp://{binding.Address}");
 
             return _clients.GetOrAdd(name, n =>
             {

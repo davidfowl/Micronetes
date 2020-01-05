@@ -1,34 +1,28 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Net.Http;
-using Microsoft.Extensions.Configuration;
 
 namespace Micronetes
 {
     public class HttpClientFactory : IClientFactory<HttpClient>
     {
         private readonly ConcurrentDictionary<string, HttpClient> _clients = new ConcurrentDictionary<string, HttpClient>(StringComparer.OrdinalIgnoreCase);
-        private readonly IConfiguration _configuration;
+        private INameResolver _nameResolver;
 
-        public HttpClientFactory(IConfiguration configuration)
+        public HttpClientFactory(INameResolver nameResolver)
         {
-            _configuration = configuration;
+            _nameResolver = nameResolver;
         }
 
         public HttpClient CreateClient(string name)
         {
-            // REVIEW: Settings options configuration from where?
+            var binding = _nameResolver.GetBinding(name);
 
-            var serviceAddress = _configuration[$"{name.ToUpper()}_SERVICE"];
-
-            if (string.IsNullOrEmpty(serviceAddress))
-            {
-                throw new InvalidOperationException($"No such http service {name}");
-            }
+            // TODO: Check the protocol here
 
             return _clients.GetOrAdd(name, k => new HttpClient()
             {
-                BaseAddress = new Uri(serviceAddress)
+                BaseAddress = new Uri(binding.Address)
             });
         }
     }

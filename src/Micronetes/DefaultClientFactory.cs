@@ -9,28 +9,20 @@ namespace Micronetes
     public class DefaultClientFactory<TClient> : IClientFactory<TClient>
     {
         private readonly ConcurrentDictionary<string, TClient> _clients = new ConcurrentDictionary<string, TClient>(StringComparer.OrdinalIgnoreCase);
-        private readonly IConfiguration _configuration;
+        private readonly INameResolver _nameResolver;
 
-        public DefaultClientFactory(IConfiguration configuration)
+        public DefaultClientFactory(INameResolver nameResolver)
         {
-            _configuration = configuration;
+            _nameResolver = nameResolver;
         }
 
         public TClient CreateClient(string name)
         {
-            // REVIEW: Settings options configuration from where?
-            var serviceAddress = _configuration[$"{name.ToUpper()}_SERVICE"];
-
-            if (string.IsNullOrEmpty(serviceAddress))
-            {
-                throw new InvalidOperationException($"No such http service {name}");
-            }
-
-            var protocol = _configuration[$"{name.ToUpper()}_SERVICE_PROTOCOL"];
+            var binding = _nameResolver.GetBinding(name);
 
             // TODO: Figure out what we should do here for defaults (or is it too much magic?)
 
-            switch (protocol?.ToLower())
+            switch (binding.Protocol?.ToLower())
             {
                 default:
                     break;
