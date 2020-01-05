@@ -1,11 +1,9 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Runtime.Loader;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -69,7 +67,7 @@ namespace Application
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
 
-            var host = Host.CreateDefaultBuilder()
+            using var host = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(web =>
                 {
                     web.Configure(app =>
@@ -143,6 +141,9 @@ namespace Application
                 .Build();
 
             var logger = host.Services.GetRequiredService<ILogger<Program>>();
+            var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+
+            lifetime.ApplicationStopping.Register(() => KillRunningProcesses(application.Services));
 
             await host.StartAsync();
 
@@ -152,24 +153,10 @@ namespace Application
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                logger.LogError(0, ex, "Failed to launch application");
             }
 
-            AssemblyLoadContext.Default.Unloading += _ =>
-            {
-                KillRunningProcesses(application.Services);
-            };
-
-            Console.CancelKeyPress += (sender, e) =>
-            {
-                e.Cancel = true;
-                KillRunningProcesses(application.Services);
-            };
-
-            using (host)
-            {
-                await host.WaitForShutdownAsync();
-            }
+            await host.WaitForShutdownAsync();
         }
 
         private static void KillRunningProcesses(IDictionary<string, Service> services)
