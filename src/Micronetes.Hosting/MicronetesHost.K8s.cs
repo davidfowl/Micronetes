@@ -140,7 +140,7 @@ namespace Micronetes.Hosting
         private static IList<V1EnvVar> BuildEnvironment(Application application, Service service)
         {
             var environment = new Dictionary<string, string>();
-            SetEnvironment(application, service, environment);
+            PopulateEnvironment(application, service, environment);
 
             var env = new List<V1EnvVar>();
             foreach (var pair in environment)

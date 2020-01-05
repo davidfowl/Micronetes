@@ -21,7 +21,7 @@ namespace Micronetes.Hosting
             Action<string> outputDataReceived = null,
             bool log = false,
             Action<int> onStart = null,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             var logWorkingDirectory = workingDirectory ?? Directory.GetCurrentDirectory();
 
