@@ -14,7 +14,7 @@ namespace BackEnd.Controllers
         [HttpPost]
         public async Task<IActionResult> Post([FromServices]IClientFactory<IModel> channelFactory)
         {
-            var channel = channelFactory.CreateClient("Queue");
+            var channel = channelFactory.CreateClient("Rabbit");
 
             channel.QueueDeclare(queue: "orders",
                                      durable: false,

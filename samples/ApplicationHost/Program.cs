@@ -49,7 +49,7 @@ namespace ApplicationHost
                 },
                 new ServiceDescription
                 {
-                    Name = "Queue",
+                    Name = "Rabbit",
                     External = true,
                     Bindings = new List<Binding>
                     {

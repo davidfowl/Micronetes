@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Micronetes;
 using Microsoft.Extensions.Hosting;
@@ -26,7 +22,7 @@ namespace Worker
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            var queue = _queueFactory.CreateClient("Queue");
+            var queue = _queueFactory.CreateClient("Rabbit");
 
             queue.QueueDeclare(queue: "orders",
                                  durable: false,
