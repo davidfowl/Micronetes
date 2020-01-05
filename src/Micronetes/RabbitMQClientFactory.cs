@@ -4,9 +4,9 @@ using RabbitMQ.Client;
 
 namespace Micronetes
 {
-    internal class RabbitMQClientFactory : IClientFactory<IModel>
+    internal class RabbitMQClientFactory : IClientFactory<IModel>, IDisposable
     {
-        private readonly ConcurrentDictionary<string, IModel> _clients = new ConcurrentDictionary<string, IModel>(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, RabbitMqClient> _clients = new ConcurrentDictionary<string, RabbitMqClient>(StringComparer.OrdinalIgnoreCase);
         private readonly INameResolver _nameResolver;
 
         public RabbitMQClientFactory(INameResolver nameResolver)
@@ -29,11 +29,40 @@ namespace Micronetes
             return _clients.GetOrAdd(name, n =>
             {
                 // REVIEW: What about the lifetime of these connections? Do they timeout?
-
                 var factory = new ConnectionFactory() { HostName = uri.Host, Port = uri.Port };
                 var connection = factory.CreateConnection();
-                return connection.CreateModel();
-            });
+                var model = connection.CreateModel();
+
+                var mq = new RabbitMqClient(connection, model);
+                return mq;
+            }).Model;
+        }
+
+        public void Dispose()
+        {
+            foreach (var client in _clients)
+            {
+                client.Value.Dispose();
+            }
+        }
+
+        private class RabbitMqClient : IDisposable
+        {
+            private readonly IConnection _connection;
+
+            public RabbitMqClient(IConnection connection, IModel model)
+            {
+                _connection = connection;
+                Model = model;
+            }
+
+            public IModel Model { get; }
+
+            public void Dispose()
+            {
+                Model.Dispose();
+                _connection.Dispose();
+            }
         }
     }
 }

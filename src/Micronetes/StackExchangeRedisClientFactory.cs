@@ -4,7 +4,7 @@ using StackExchange.Redis;
 
 namespace Micronetes
 {
-    internal class StackExchangeRedisClientFactory : IClientFactory<ConnectionMultiplexer>
+    internal class StackExchangeRedisClientFactory : IClientFactory<ConnectionMultiplexer>, IDisposable
     {
         private readonly ConcurrentDictionary<string, ConnectionMultiplexer> _clients = new ConcurrentDictionary<string, ConnectionMultiplexer>();
 
@@ -31,6 +31,14 @@ namespace Micronetes
                 // REVIEW: What about async? Do we make sure that clients all have a an explicit Connect
                 return ConnectionMultiplexer.Connect(binding.Address);
             });
+        }
+
+        public void Dispose()
+        {
+            foreach (var client in _clients)
+            {
+                client.Value.Dispose();
+            }
         }
     }
 }

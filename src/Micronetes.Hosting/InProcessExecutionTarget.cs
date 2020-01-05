@@ -98,14 +98,17 @@ namespace Micronetes.Hosting
         }
 
 
-        public Task StopAsync(Application application)
+        public async Task StopAsync(Application application)
         {
             var tasks = new Task[application.Services.Count];
             var index = 0;
+            var hosts = new List<IHost>();
+
             foreach (var service in application.Services.Values)
             {
                 if (service.Items.TryGetValue(typeof(IHost), out var hostObj) && hostObj is IHost host)
                 {
+                    hosts.Add(host);
                     tasks[index++] = host.StopAsync();
                 }
                 else
@@ -114,7 +117,9 @@ namespace Micronetes.Hosting
                 }
             }
 
-            return Task.WhenAll(tasks);
+            await Task.WhenAll(tasks);
+
+            hosts.ForEach(h => h.Dispose());
         }
 
         private static string GetDllPath(string serviceName)
