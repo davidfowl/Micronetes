@@ -155,7 +155,7 @@ namespace Micronetes.Hosting
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                // Mono.Unix.Native.Syscall.kill(process.Id, Mono.Unix.Native.Signum.SIGINT);
+                Mono.Unix.Native.Syscall.kill(process.Id, Mono.Unix.Native.Signum.SIGINT);
 
                 // Tentatively invoke SIGINT
                 var waitForShutdownDelay = Task.Delay(TimeSpan.FromSeconds(5));

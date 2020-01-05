@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="KubernetesClient" Version="1.6.6" />
+    <PackageReference Include="Mono.Posix.NETStandard" Version="1.0.0" />
   </ItemGroup>
 
 </Project>
