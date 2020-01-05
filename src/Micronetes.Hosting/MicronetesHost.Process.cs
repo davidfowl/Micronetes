@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
@@ -34,7 +35,7 @@ namespace Micronetes.Hosting
 
             PopulateEnvironment(application, service, environment);
 
-            var thread = new Thread(() =>
+            service.Thread = new Thread(() =>
             {
                 logger.LogInformation("Launching service {ServiceName}", serviceName);
 
@@ -85,9 +86,7 @@ namespace Micronetes.Hosting
                 }
             });
 
-            thread.Start();
-
-            service.Thread = thread;
+            service.Thread.Start();
 
             return tcs.Task;
         }

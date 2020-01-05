@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using k8s;
 using k8s.Models;
+using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest;
 

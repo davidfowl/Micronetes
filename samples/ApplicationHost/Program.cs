@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Micronetes.Hosting;
+using Micronetes.Hosting.Model;
 
 namespace ApplicationHost
 {
@@ -8,13 +9,14 @@ namespace ApplicationHost
     {
         public static async Task Main(string[] args)
         {
+            
             var application = new Application(new[]
             {
                 new ServiceDescription {
                     Name = "FrontEnd",
-                    Bindings = new List<Binding>
+                    Bindings = new List<ServiceBinding>
                     {
-                        new Binding {
+                        new ServiceBinding {
                             Name = "default",
                             Address = "http://localhost:7000",
                             Protocol = "http"
@@ -23,9 +25,9 @@ namespace ApplicationHost
                 },
                 new ServiceDescription {
                     Name = "BackEnd",
-                    Bindings = new List<Binding>
+                    Bindings = new List<ServiceBinding>
                     {
-                        new Binding {
+                        new ServiceBinding {
                             Name = "default",
                             Address = "http://localhost:8000",
                             Protocol = "http"
@@ -38,9 +40,9 @@ namespace ApplicationHost
                 new ServiceDescription {
                     Name = "Redis",
                     External = true,
-                    Bindings = new List<Binding>
+                    Bindings = new List<ServiceBinding>
                     {
-                        new Binding {
+                        new ServiceBinding {
                             Name = "default",
                             Address = "localhost:6379",
                             Protocol = "redis"
@@ -51,9 +53,9 @@ namespace ApplicationHost
                 {
                     Name = "Rabbit",
                     External = true,
-                    Bindings = new List<Binding>
+                    Bindings = new List<ServiceBinding>
                     {
-                        new Binding
+                        new ServiceBinding
                         {
                             Name = "default",
                             Address = "localhost:5672",

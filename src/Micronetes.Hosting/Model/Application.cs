@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace Micronetes.Hosting
+namespace Micronetes.Hosting.Model
 {
     public class Application
     {

@@ -1,6 +1,6 @@
-﻿namespace Micronetes.Hosting
+﻿namespace Micronetes.Hosting.Model
 {
-    public class Binding
+    public class ServiceBinding
     {
         public string Name { get; set; }
         public string Address { get; set; }

@@ -2,7 +2,7 @@
 using System.Text.Json.Serialization;
 using System.Threading;
 
-namespace Micronetes.Hosting
+namespace Micronetes.Hosting.Model
 {
     public class Service
     {
