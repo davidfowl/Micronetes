@@ -9,23 +9,27 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Micronetes
 {
     public class ServiceRegistrationHostedService : IHostedService
     {
-        private IConfiguration _configuration;
+        private readonly ILogger<ServiceRegistrationHostedService> _logger;
+        private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _environment;
         private readonly IHostApplicationLifetime _lifetime;
         private readonly HttpServiceRegistry _serviceRegistry;
         private readonly IServer _server;
 
-        public ServiceRegistrationHostedService(IConfiguration configuration,
+        public ServiceRegistrationHostedService(ILogger<ServiceRegistrationHostedService> logger,
+                                                IConfiguration configuration,
                                                 IHostEnvironment environment,
                                                 IHostApplicationLifetime lifetime,
                                                 HttpServiceRegistry serviceRegistry,
                                                 IServer server = null)
         {
+            _logger = logger;
             _configuration = configuration;
             _environment = environment;
             _lifetime = lifetime;
@@ -64,19 +68,35 @@ namespace Micronetes
 
         private async Task PopulateServiceRegistryAsync(string url)
         {
-            var client = new HttpClient()
+            try
             {
-                BaseAddress = new Uri(url)
-            };
+                var client = new HttpClient()
+                {
+                    BaseAddress = new Uri(url)
+                };
 
-            var response = await client.GetAsync("/api/v1/services");
-            response.EnsureSuccessStatusCode();
+                _logger.LogInformation("Populating service registry from {url}", url);
 
-            var services = await JsonSerializer.DeserializeAsync<JsonElement>(await response.Content.ReadAsStreamAsync());
-            foreach (var e in services.EnumerateObject())
+                var response = await client.GetAsync("/api/v1/services");
+                response.EnsureSuccessStatusCode();
+
+                var services = await JsonSerializer.DeserializeAsync<JsonElement>(await response.Content.ReadAsStreamAsync());
+                foreach (var e in services.EnumerateObject())
+                {
+                    var bindings = e.Value.GetProperty("Description").GetProperty("Bindings");
+                    var addresses = new List<string>();
+
+                    foreach (var binding in bindings.EnumerateArray())
+                    {
+                        addresses.Add(binding.GetProperty("Address").GetString());
+                    }
+
+                    _serviceRegistry.RegisterAddress(e.Name, addresses);
+                }
+            }
+            catch (Exception ex)
             {
-                var addresses = e.Value.GetProperty("Description").GetProperty("Addresses").EnumerateArray().Select(e => e.GetString());
-                _serviceRegistry.RegisterAddress(e.Name, addresses);
+                _logger.LogError(ex, "Failed to populate service registry");
             }
         }
 

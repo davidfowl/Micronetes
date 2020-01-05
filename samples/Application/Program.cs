@@ -20,41 +20,43 @@ namespace Application
 {
     public class Program
     {
-        private static string ServicesPath = Path.Combine("obj", "services.json");
-
         public static Application App = new Application(new[]
             {
                 new ServiceDescription {
                     Name = "FrontEnd",
-                    Addresses = new List<string>
+                    Bindings = new List<Binding>
                     {
-                        "http://localhost:7000",
-                    },
-                    Exposed = new List<string>
-                    {
-                        "HTTP"
+                        new Binding {
+                            Name = "default",
+                            Address = "http://localhost:7000",
+                            Protocol = "http"
+                        }
                     }
                 },
                 new ServiceDescription {
                     Name = "BackEnd",
-                    Addresses = new List<string>
+                    Bindings = new List<Binding>
                     {
-                        "http://localhost:8000",
-                    },
-                    Exposed = new List<string>
-                    {
-                        "HTTP"
+                        new Binding {
+                            Name = "default",
+                            Address = "http://localhost:8000",
+                            Protocol = "http"
+                        }
                     }
                 },
                 new ServiceDescription {
                     Name = "Worker",
                 },
                 new ServiceDescription {
-                    Name = "MQ",
+                    Name = "Redis",
                     External = true,
-                    Exposed = new List<string>
+                    Bindings = new List<Binding>
                     {
-                        "Queue"
+                        new Binding {
+                            Name = "default",
+                            Address = "localhost:6379",
+                            Protocol = "redis"
+                        }
                     }
                 }
             });
@@ -96,9 +98,7 @@ namespace Application
                             });
 
                             endpoints.MapGet("/api/v1/services/{name}", async context =>
-                             {
-                                 await App.Intialized;
-
+                            {
                                  var name = (string)context.Request.RouteValues["name"];
                                  context.Response.ContentType = "application/json";
 
@@ -119,8 +119,6 @@ namespace Application
 
                             endpoints.MapGet("/api/v1/logs/{name}", async context =>
                             {
-                                await App.Intialized;
-
                                 var name = (string)context.Request.RouteValues["name"];
                                 context.Response.ContentType = "application/json";
 
@@ -162,42 +160,43 @@ namespace Application
                 KillRunningProcesses(App.Services);
             };
 
-            try
+            using (host)
             {
-                using (host)
-                {
-                    await host.WaitForShutdownAsync();
-                }
+                await host.WaitForShutdownAsync();
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
-            finally
-            {
-                KillRunningProcesses(App.Services);
-            }
-
         }
 
         private static void KillRunningProcesses(IDictionary<string, Service> services)
         {
-            foreach (var s in services.Values)
+            static void KillProcess(int? pid)
             {
-                if (s.Pid == null)
+                if (pid == null)
                 {
-                    continue;
+                    return;
                 }
+
+                // Just to unblock the requests
+                App.ServiceBound();
 
                 try
                 {
-                    ProcessUtil.StopProcess(Process.GetProcessById(s.Pid.Value));
+                    ProcessUtil.StopProcess(Process.GetProcessById(pid.Value));
                 }
                 catch (Exception)
                 {
 
                 }
             }
+
+            var index = 0;
+            var tasks = new Task[services.Count];
+            foreach (var s in services.Values)
+            {
+                var pid = s.Pid;
+                tasks[index++] = Task.Run(() => KillProcess(pid));
+            }
+
+            Task.WaitAll(tasks);
         }
 
         private static Task LaunchInProcess(string[] args)
@@ -257,7 +256,7 @@ namespace Application
                                 return;
                             }
 
-                            if (serviceDescription.HasAddresses)
+                            if (serviceDescription.Bindings.Count > 0)
                             {
                                 // Now listening on: "{url}"
                                 var line = data.Trim();
@@ -281,7 +280,7 @@ namespace Application
 
                             service.Pid = pid;
 
-                            if (!serviceDescription.HasAddresses)
+                            if (serviceDescription.Bindings.Count == 0)
                             {
                                 tcs.TrySetResult(null);
                             }
@@ -290,9 +289,9 @@ namespace Application
 
                     service.ExitCode = result.ExitCode;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-
+                    logger.LogError(0, ex, "{ServiceName} Failed to launch", serviceName);
                 }
                 finally
                 {
@@ -318,9 +317,9 @@ namespace Application
         {
             var path = Path.Combine(Directory.GetCurrentDirectory(), service.Description.Name);
 
-            if (service.Description.HasAddresses)
+            if (service.Description.Bindings.Count > 0)
             {
-                var moreArgs = service.Description.Addresses.Select(a => $"--urls={a}");
+                var moreArgs = service.Description.Bindings.Select(a => $"--urls={a.Address}");
 
                 var s = args.Concat(new[] { $"--contentRoot={path}" }).Concat(moreArgs).ToArray();
                 return s;
@@ -337,10 +336,15 @@ namespace Application
         public class ServiceDescription
         {
             public string Name { get; set; }
-            public bool HasAddresses => Addresses.Count > 0;
             public bool External { get; set; }
-            public List<string> Exposed { get; set; } = new List<string>();
-            public List<string> Addresses { get; set; } = new List<string>();
+            public List<Binding> Bindings { get; set; } = new List<Binding>();
+        }
+
+        public class Binding
+        {
+            public string Name { get; set; }
+            public string Address { get; set; }
+            public string Protocol { get; set; }
         }
 
         public class Service
@@ -375,7 +379,7 @@ namespace Application
                         Description = s
                     };
 
-                    if (s.HasAddresses)
+                    if (s.Bindings.Count > 0 && !s.External)
                     {
                         _bindableServices++;
                     }
