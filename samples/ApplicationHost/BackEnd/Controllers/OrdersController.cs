@@ -1,9 +1,9 @@
 ﻿using System.Buffers;
 using System.Linq;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Micronetes;
 using Microsoft.AspNetCore.Mvc;
+using RabbitMQ.Client;
 
 namespace BackEnd.Controllers
 {
@@ -12,9 +12,15 @@ namespace BackEnd.Controllers
     public class OrdersController : ControllerBase
     {
         [HttpPost]
-        public async Task Post([FromServices]IClientFactory<Channel<byte[]>> channelFactory)
+        public async Task<IActionResult> Post([FromServices]IClientFactory<IModel> channelFactory)
         {
-            var orders = channelFactory.CreateClient("queue/orders");
+            var channel = channelFactory.CreateClient("Queue");
+
+            channel.QueueDeclare(queue: "orders",
+                                     durable: false,
+                                     exclusive: false,
+                                     autoDelete: false,
+                                     arguments: null);
 
             var reader = Request.BodyReader;
             while (true)
@@ -24,13 +30,19 @@ namespace BackEnd.Controllers
 
                 if (result.IsCompleted)
                 {
-                    await orders.Writer.WriteAsync(buffer.ToArray());
+                    channel.BasicPublish(exchange: "",
+                                     routingKey: "orders",
+                                     basicProperties: null,
+                                     body: buffer.ToArray());
+
                     reader.AdvanceTo(buffer.End);
                     break;
                 }
 
                 reader.AdvanceTo(buffer.Start, buffer.End);
             }
+
+            return Accepted();
         }
     }
 }

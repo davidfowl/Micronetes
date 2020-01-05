@@ -46,6 +46,20 @@ namespace ApplicationHost
                             Protocol = "redis"
                         }
                     }
+                },
+                new ServiceDescription
+                {
+                    Name = "Queue",
+                    External = true,
+                    Bindings = new List<Binding>
+                    {
+                        new Binding
+                        {
+                            Name = "default",
+                            Address = "localhost:5672",
+                            Protocol = "rabbitmq" // amqp?
+                        }
+                    }
                 }
             });
 

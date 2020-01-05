@@ -26,7 +26,6 @@ namespace Micronetes
                 throw new InvalidOperationException($"No such http service {name}");
             }
 
-
             return _clients.GetOrAdd(name, k => new HttpClient()
             {
                 BaseAddress = new Uri(serviceAddress)
