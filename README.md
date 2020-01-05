@@ -1,6 +1,6 @@
 # Micronetes
 
-.NET Microservice communication made easy. This project is trying to tackle a couple of things:
+.NET Microservices made easy. This project is trying to tackle a couple of things:
 - Have standard interfaces for common communication paradigms.
    - PubSub
    - Queues
@@ -9,7 +9,6 @@
 - Abstract the idea of a service address.
 - Explore what it means to run a multi-project application locally.
 - Explore what it means to deploy this application to kubernetes without changes to the code and have it just work.
-
 
 The core interface for client -> service communication the `IClientFactory<TClient>`:
 
