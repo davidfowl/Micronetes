@@ -113,13 +113,13 @@ namespace Micronetes.Hosting
 
             try
             {
-                if (configuration["k8s"] == null && configuration["kubernetes"] == null)
+                if (args.Contains("--k8s") || args.Contains("--kubernetes"))
                 {
-                    await LaunchApplication(application, logger);
+                    await LaunchApplcationInK8s(application, logger);
                 }
                 else
                 {
-                    await LaunchApplcationInK8s(application, logger);
+                    await LaunchApplication(application, logger);
                 }
             }
             catch (Exception ex)
