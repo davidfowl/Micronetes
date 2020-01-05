@@ -56,10 +56,28 @@ Pubbie
 Redis 
   - (default, 127.0.0.1:6379, redis)
 
+MyQueue
+ - (default, localhost:5672, rabbitmq)
+
 Database 
  - (default, mongodb://localhost, mongodb)
  - (sql, Data Source=.;Initial Catalog=DB name;Integrated Security=True;MultipleActiveResultSets=True, sqlserver)
 
+```
+
+These service names get injected into the application as environment variables by the ochrestrator (k8s or local). This allows the client code to access the address information at runtime.
+
+The following binding gets translated as follows:
+
+```
+MyWeb
+ - (default, http://127.0.0.1:80, http)
+ - (management, http://127.0.0.1:3000, http)
+
+MYWEB_SERVICE=http://127.0.0.1:80
+MYWEB_SERVICE_PROTOCOL=http
+MYWEB_SERVICE_MANAGEMENT=http://127.0.0.1:3000
+MYWEB_SERVICE_MANAGEMENT_PROTOCOL=http
 ```
 
 The "default" binding can be accesed by the name of the service. To access other addresses, the full name must be accessed:
@@ -83,7 +101,6 @@ Most services will have a single binding so accessing them by service name direc
 ## Protocols
 
 The `IClientFactory<T>` implementation must understand protocol names directly. For example, the the `PubSubClientFactory` has to understand the redis protocol in order to speak to an endpoint.
-
 
 ## Open Questions
 
