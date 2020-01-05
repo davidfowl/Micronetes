@@ -63,7 +63,11 @@ namespace Application
                 }
             });
 
-            var options = new JsonSerializerOptions() { };
+            var options = new JsonSerializerOptions()
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
 
             var host = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(web =>
@@ -89,7 +93,7 @@ namespace Application
                             {
                                 context.Response.ContentType = "application/json";
 
-                                var services = application.Services.OrderBy(s => s.Key).ToDictionary(s => s.Key, s => s.Value);
+                                var services = application.Services.OrderBy(s => s.Key).Select(s => s.Value);
 
                                 await JsonSerializer.SerializeAsync(context.Response.Body, services, options);
                             });
@@ -144,7 +148,7 @@ namespace Application
 
             try
             {
-                await LaunchOutOfProcess(application, logger, args);
+                await LaunchApplication(application, logger, args);
             }
             catch (Exception ex)
             {
@@ -198,7 +202,7 @@ namespace Application
             Task.WaitAll(tasks);
         }
 
-        private static Task LaunchOutOfProcess(Application application, ILogger logger, string[] args)
+        private static Task LaunchApplication(Application application, ILogger logger, string[] args)
         {
             var tasks = new Task[application.Services.Count];
             var index = 0;
@@ -316,20 +320,14 @@ namespace Application
             return args.Concat(newArgs).ToArray();
         }
 
-        public class ServiceDescription
+        public class Application
         {
-            public string Name { get; set; }
-            public bool External { get; set; }
-            public List<Binding> Bindings { get; set; } = new List<Binding>();
-        }
+            public Application(ServiceDescription[] services)
+            {
+                Services = services.ToDictionary(s => s.Name, s => new Service { Description = s });
+            }
 
-        public class Binding
-        {
-            public string Name { get; set; }
-            public string Address { get; set; }
-            public string Protocol { get; set; }
-
-            internal bool IsDefault => Name == "default";
+            public Dictionary<string, Service> Services { get; }
         }
 
         public class Service
@@ -349,20 +347,20 @@ namespace Application
             public int? ExitCode { get; set; }
         }
 
-        public class Application
+        public class ServiceDescription
         {
-            public Application(ServiceDescription[] services)
-            {
-                foreach (var s in services)
-                {
-                    Services[s.Name] = new Service
-                    {
-                        Description = s
-                    };
-                }
-            }
+            public string Name { get; set; }
+            public bool External { get; set; }
+            public List<Binding> Bindings { get; set; } = new List<Binding>();
+        }
 
-            public Dictionary<string, Service> Services { get; } = new Dictionary<string, Service>();
+        public class Binding
+        {
+            public string Name { get; set; }
+            public string Address { get; set; }
+            public string Protocol { get; set; }
+
+            internal bool IsDefault => Name == "default";
         }
     }
 }
