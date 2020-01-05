@@ -20,7 +20,9 @@ namespace Application
 {
     public class Program
     {
-        public static Application App = new Application(new[]
+        public static async Task Main(string[] args)
+        {
+            var application = new Application(new[]
             {
                 new ServiceDescription {
                     Name = "FrontEnd",
@@ -61,12 +63,7 @@ namespace Application
                 }
             });
 
-        public static async Task Main(string[] args)
-        {
-            var options = new JsonSerializerOptions()
-            {
-
-            };
+            var options = new JsonSerializerOptions() { };
 
             var host = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(web =>
@@ -90,39 +87,39 @@ namespace Application
 
                             endpoints.MapGet("/api/v1/services", async context =>
                             {
-                                await App.Intialized;
-
                                 context.Response.ContentType = "application/json";
 
-                                await JsonSerializer.SerializeAsync(context.Response.Body, App.Services, options);
+                                var services = application.Services.OrderBy(s => s.Key).ToDictionary(s => s.Key, s => s.Value);
+
+                                await JsonSerializer.SerializeAsync(context.Response.Body, services, options);
                             });
 
                             endpoints.MapGet("/api/v1/services/{name}", async context =>
                             {
-                                 var name = (string)context.Request.RouteValues["name"];
-                                 context.Response.ContentType = "application/json";
+                                var name = (string)context.Request.RouteValues["name"];
+                                context.Response.ContentType = "application/json";
 
-                                 if (!App.Services.TryGetValue(name, out var service))
-                                 {
-                                     context.Response.StatusCode = 404;
-                                     await JsonSerializer.SerializeAsync(context.Response.Body, new
-                                     {
-                                         message = $"Unknown service {name}"
-                                     },
-                                     options);
+                                if (!application.Services.TryGetValue(name, out var service))
+                                {
+                                    context.Response.StatusCode = 404;
+                                    await JsonSerializer.SerializeAsync(context.Response.Body, new
+                                    {
+                                        message = $"Unknown service {name}"
+                                    },
+                                    options);
 
-                                     return;
-                                 }
+                                    return;
+                                }
 
-                                 await JsonSerializer.SerializeAsync(context.Response.Body, service, options);
-                             });
+                                await JsonSerializer.SerializeAsync(context.Response.Body, service, options);
+                            });
 
                             endpoints.MapGet("/api/v1/logs/{name}", async context =>
                             {
                                 var name = (string)context.Request.RouteValues["name"];
                                 context.Response.ContentType = "application/json";
 
-                                if (!App.Services.TryGetValue(name, out var service))
+                                if (!application.Services.TryGetValue(name, out var service))
                                 {
                                     context.Response.StatusCode = 404;
                                     await JsonSerializer.SerializeAsync(context.Response.Body, new
@@ -147,8 +144,7 @@ namespace Application
 
             try
             {
-                // await LaunchInProcess(args);
-                await LaunchOutOfProcess(logger, args);
+                await LaunchOutOfProcess(application, logger, args);
             }
             catch (Exception ex)
             {
@@ -157,7 +153,13 @@ namespace Application
 
             AssemblyLoadContext.Default.Unloading += _ =>
             {
-                KillRunningProcesses(App.Services);
+                KillRunningProcesses(application.Services);
+            };
+
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                KillRunningProcesses(application.Services);
             };
 
             using (host)
@@ -174,9 +176,6 @@ namespace Application
                 {
                     return;
                 }
-
-                // Just to unblock the requests
-                App.ServiceBound();
 
                 try
                 {
@@ -199,45 +198,48 @@ namespace Application
             Task.WaitAll(tasks);
         }
 
-        private static Task LaunchInProcess(string[] args)
+        private static Task LaunchOutOfProcess(Application application, ILogger logger, string[] args)
         {
-            // Not needed for in process but helps with debugging
-            // Environment.SetEnvironmentVariable("API_SERVER", "http://localhost:5000");
-            // Environment.SetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES", "Application");
-
-            var tasks = new[]
-            {
-                FrontEnd.Program.Main(DefineService(args, App.Services["FrontEnd"])),
-                BackEnd.Program.Main(DefineService(args, App.Services["BackEnd"])),
-                Worker.Program.Main(DefineService(args, App.Services["Worker"]))
-            };
-
-            return Task.CompletedTask;
-        }
-
-        private static Task LaunchOutOfProcess(ILogger logger, string[] args)
-        {
-            // Locate executable how?
-            var tasks = new Task[App.Services.Count];
+            var tasks = new Task[application.Services.Count];
             var index = 0;
-            foreach (var s in App.Services)
+            foreach (var s in application.Services)
             {
-                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(logger, s.Value, args);
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, logger, s.Value, args);
             }
 
             return Task.WhenAll(tasks);
         }
 
-        private static Task LaunchService(ILogger logger, Service service, string[] args)
+        private static Task LaunchService(Application application, ILogger logger, Service service, string[] args)
         {
             var serviceDescription = service.Description;
             var serviceName = serviceDescription.Name;
             var path = GetExePath(serviceName);
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var env = new Dictionary<string, string>
+            var environment = new Dictionary<string, string>();
+
+            foreach (var s in application.Services.Values)
             {
-                { "API_SERVER", "https://localhost:5001" }
-            };
+                if (s == service)
+                {
+                    continue;
+                }
+
+                foreach (var b in s.Description.Bindings)
+                {
+                    string bindingName = null;
+                    if (b.IsDefault)
+                    {
+                        bindingName = $"{s.Description.Name.ToUpper()}_SERVICE";
+                    }
+                    else
+                    {
+                        bindingName = $"{s.Description.Name.ToUpper()}_{b.Name.ToUpper()}_SERVICE";
+                    }
+                    environment[bindingName] = b.Address;
+                    environment[$"{bindingName}_PROTOCOL"] = b.Protocol;
+                }
+            }
 
             var thread = new Thread(() =>
             {
@@ -246,30 +248,14 @@ namespace Application
                 ProcessResult result = null;
                 try
                 {
-                    result = ProcessUtil.Run(path, string.Join(" ", DefineService(args, service)),
-                        environmentVariables: env,
+                    result = ProcessUtil.Run(path, string.Join(" ", AddServiceBinding(args, service)),
+                        environmentVariables: environment,
                         workingDirectory: Path.Combine(Directory.GetCurrentDirectory(), serviceName),
                         outputDataReceived: data =>
                         {
                             if (data == null)
                             {
                                 return;
-                            }
-
-                            if (serviceDescription.Bindings.Count > 0)
-                            {
-                                // Now listening on: "{url}"
-                                var line = data.Trim();
-                                if (line.StartsWith("Now listening on") && line.IndexOf("http") >= 0)
-                                {
-                                    var addressIndex = line.IndexOf("http");
-
-                                    App.ServiceBound();
-
-                                    tcs.TrySetResult(null);
-
-                                    logger.LogInformation("{ServiceName} bound", serviceName);
-                                }
                             }
 
                             service.Logs.Add(data);
@@ -280,10 +266,7 @@ namespace Application
 
                             service.Pid = pid;
 
-                            if (serviceDescription.Bindings.Count == 0)
-                            {
-                                tcs.TrySetResult(null);
-                            }
+                            tcs.TrySetResult(null);
                         },
                         throwOnError: false);
 
@@ -310,22 +293,22 @@ namespace Application
 
         private static string GetExePath(string serviceName)
         {
+            // TODO: How do we determine the output path? Assembly attribute compiled in by the build system?
             return Path.Combine(Directory.GetCurrentDirectory(), serviceName, "bin", "Debug", "netcoreapp3.1", serviceName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : ""));
         }
 
-        private static string[] DefineService(string[] args, Service service)
+        private static string[] AddServiceBinding(string[] args, Service service)
         {
-            var path = Path.Combine(Directory.GetCurrentDirectory(), service.Description.Name);
-
             if (service.Description.Bindings.Count > 0)
             {
-                var moreArgs = service.Description.Bindings.Select(a => $"--urls={a.Address}");
+                var moreArgs = service.Description.Bindings.Where(b => b.IsDefault)
+                                                           .Select(a => $"--urls={a.Address}")
+                                                           .ToArray();
 
-                var s = args.Concat(new[] { $"--contentRoot={path}" }).Concat(moreArgs).ToArray();
-                return s;
+                return CombineArgs(args, moreArgs);
             }
 
-            return CombineArgs(args, $"--contentRoot={path}");
+            return args;
         }
 
         private static string[] CombineArgs(string[] args, params string[] newArgs)
@@ -345,6 +328,8 @@ namespace Application
             public string Name { get; set; }
             public string Address { get; set; }
             public string Protocol { get; set; }
+
+            internal bool IsDefault => Name == "default";
         }
 
         public class Service
@@ -366,37 +351,18 @@ namespace Application
 
         public class Application
         {
-            private int _bindableServices;
-            private readonly TaskCompletionSource<object> _tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-
             public Application(ServiceDescription[] services)
             {
                 foreach (var s in services)
                 {
                     Services[s.Name] = new Service
                     {
-                        Pid = s.External ? (int?)null : Process.GetCurrentProcess().Id,
                         Description = s
                     };
-
-                    if (s.Bindings.Count > 0 && !s.External)
-                    {
-                        _bindableServices++;
-                    }
                 }
             }
 
-            public ConcurrentDictionary<string, Service> Services { get; } = new ConcurrentDictionary<string, Service>();
-
-            public Task Intialized => _tcs.Task;
-
-            public void ServiceBound()
-            {
-                if (Interlocked.Decrement(ref _bindableServices) == 0)
-                {
-                    _tcs.TrySetResult(null);
-                }
-            }
+            public Dictionary<string, Service> Services { get; } = new Dictionary<string, Service>();
         }
     }
 }

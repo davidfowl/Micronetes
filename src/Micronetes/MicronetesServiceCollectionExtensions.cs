@@ -27,8 +27,6 @@ namespace Micronetes
                 services.AddSingleton<IClientFactory<PubSubClient>, PubSubClientFactory>();
                 services.AddSingleton<IClientFactory<Channel<byte[]>>, ChannelFactory>();
                 services.AddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
-                services.AddSingleton(HttpServiceRegistry.Default);
-                services.AddHostedService<ServiceRegistrationHostedService>();
             }
             return services;
         }
