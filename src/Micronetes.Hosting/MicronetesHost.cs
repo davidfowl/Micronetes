@@ -25,7 +25,7 @@ namespace Micronetes.Hosting
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
 
-            using var host = Host.CreateDefaultBuilder()
+            using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(web =>
                 {
                     web.Configure(app =>
@@ -107,7 +107,7 @@ namespace Micronetes.Hosting
 
             try
             {
-                await LaunchApplication(application, logger, args);
+                await LaunchApplication(application, logger);
             }
             catch (Exception ex)
             {
@@ -117,49 +117,19 @@ namespace Micronetes.Hosting
             await host.WaitForShutdownAsync();
         }
 
-        private static void KillRunningProcesses(IDictionary<string, Service> services)
-        {
-            static void KillProcess(int? pid)
-            {
-                if (pid == null)
-                {
-                    return;
-                }
-
-                try
-                {
-                    ProcessUtil.StopProcess(Process.GetProcessById(pid.Value));
-                }
-                catch (Exception)
-                {
-
-                }
-            }
-
-            var index = 0;
-            var tasks = new Task[services.Count];
-            foreach (var s in services.Values)
-            {
-                var pid = s.Pid;
-                tasks[index++] = Task.Run(() => KillProcess(pid));
-            }
-
-            Task.WaitAll(tasks);
-        }
-
-        private static Task LaunchApplication(Application application, ILogger logger, string[] args)
+        private static Task LaunchApplication(Application application, ILogger logger)
         {
             var tasks = new Task[application.Services.Count];
             var index = 0;
             foreach (var s in application.Services)
             {
-                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, logger, s.Value, args);
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, logger, s.Value);
             }
 
             return Task.WhenAll(tasks);
         }
 
-        private static Task LaunchService(Application application, ILogger logger, Service service, string[] args)
+        private static Task LaunchService(Application application, ILogger logger, Service service)
         {
             var serviceDescription = service.Description;
             var serviceName = serviceDescription.Name;
@@ -194,10 +164,9 @@ namespace Micronetes.Hosting
             {
                 logger.LogInformation("Launching service {ServiceName}", serviceName);
 
-                ProcessResult result = null;
                 try
                 {
-                    result = ProcessUtil.Run(path, string.Join(" ", AddServiceBinding(args, service)),
+                    var result = ProcessUtil.Run(path, GetServiceBindingArgs(service),
                         environmentVariables: environment,
                         workingDirectory: Path.Combine(Directory.GetCurrentDirectory(), serviceName),
                         outputDataReceived: data =>
@@ -249,23 +218,53 @@ namespace Micronetes.Hosting
             return tcs.Task;
         }
 
+        private static void KillRunningProcesses(IDictionary<string, Service> services)
+        {
+            static void KillProcess(int? pid)
+            {
+                if (pid == null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    ProcessUtil.StopProcess(Process.GetProcessById(pid.Value));
+                }
+                catch (Exception)
+                {
+
+                }
+            }
+
+            var index = 0;
+            var tasks = new Task[services.Count];
+            foreach (var s in services.Values)
+            {
+                var pid = s.Pid;
+                tasks[index++] = Task.Run(() => KillProcess(pid));
+            }
+
+            Task.WaitAll(tasks);
+        }
+
         private static string GetExePath(string serviceName)
         {
             // TODO: How do we determine the output path? Assembly attribute compiled in by the build system?
             return Path.Combine(Directory.GetCurrentDirectory(), serviceName, "bin", "Debug", "netcoreapp3.1", serviceName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : ""));
         }
 
-        private static string[] AddServiceBinding(string[] args, Service service)
+        private static string GetServiceBindingArgs(Service service)
         {
             if (service.Description.Bindings.Count > 0)
             {
                 var moreArgs = service.Description.Bindings.Where(b => b.IsDefault)
                                                            .Select(a => $"--urls={a.Address}");
 
-                return args.Concat(moreArgs).ToArray();
+                return $"--urls={service.Description.DefaultBinding.Address}";
             }
 
-            return args;
+            return string.Empty;
         }
     }
 }

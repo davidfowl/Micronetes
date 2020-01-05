@@ -139,7 +139,7 @@ namespace Micronetes.Hosting
                     attempts++;
                     return operation();
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     if (attempts == retries + 1)
                     {
