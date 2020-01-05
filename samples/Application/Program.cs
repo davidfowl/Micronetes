@@ -306,18 +306,12 @@ namespace Application
             if (service.Description.Bindings.Count > 0)
             {
                 var moreArgs = service.Description.Bindings.Where(b => b.IsDefault)
-                                                           .Select(a => $"--urls={a.Address}")
-                                                           .ToArray();
+                                                           .Select(a => $"--urls={a.Address}");
 
-                return CombineArgs(args, moreArgs);
+                return args.Concat(moreArgs).ToArray();
             }
 
             return args;
-        }
-
-        private static string[] CombineArgs(string[] args, params string[] newArgs)
-        {
-            return args.Concat(newArgs).ToArray();
         }
 
         public class Application
