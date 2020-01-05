@@ -115,14 +115,6 @@ namespace Micronetes.Hosting
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
             var target = GetTarget(args, logger);
 
-            lifetime.ApplicationStopping.Register(() =>
-            {
-                logger.LogInformation("Shutting down...");
-
-                // Yikes...
-                target.StopAsync(application).Wait();
-            });
-
             await host.StartAsync();
 
             logger.LogInformation("API server running on {Addresses}", string.Join(", ", serverAddressesFeature.Addresses));
@@ -136,7 +128,16 @@ namespace Micronetes.Hosting
                 logger.LogError(0, ex, "Failed to launch application");
             }
 
-            await host.WaitForShutdownAsync();
+            try
+            {
+                await host.WaitForShutdownAsync();
+
+                logger.LogInformation("Shutting down...");
+            }
+            finally
+            {
+                await target.StopAsync(application);
+            }
         }
 
         private static IExecutionTarget GetTarget(string[] args, Microsoft.Extensions.Logging.ILogger logger)
