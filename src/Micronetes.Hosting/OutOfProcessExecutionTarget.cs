@@ -44,6 +44,7 @@ namespace Micronetes.Hosting
             var path = GetExePath(serviceName);
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             var environment = new Dictionary<string, string>();
+            var args = service.Description.Bindings.Count > 0 ? $"--urls={service.Description.DefaultBinding.Address}" : "";
 
             application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
@@ -55,7 +56,7 @@ namespace Micronetes.Hosting
 
                 try
                 {
-                    var result = ProcessUtil.Run(path, GetServiceBindingArgs(service),
+                    var result = ProcessUtil.Run(path, args,
                         environmentVariables: environment,
                         workingDirectory: Path.Combine(Directory.GetCurrentDirectory(), serviceName),
                         outputDataReceived: data =>
@@ -138,16 +139,6 @@ namespace Micronetes.Hosting
         {
             // TODO: How do we determine the output path? Assembly attribute compiled in by the build system?
             return Path.Combine(Directory.GetCurrentDirectory(), serviceName, "bin", "Debug", "netcoreapp3.1", serviceName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : ""));
-        }
-
-        private static string GetServiceBindingArgs(Service service)
-        {
-            if (service.Description.Bindings.Count > 0)
-            {
-                return $"--urls={service.Description.DefaultBinding.Address}";
-            }
-
-            return string.Empty;
         }
 
         private class ProcessState
