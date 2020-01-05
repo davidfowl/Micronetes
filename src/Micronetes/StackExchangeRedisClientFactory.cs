@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
 
 namespace Micronetes

@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Net.Http;
-using System.Threading.Channels;
+﻿using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RabbitMQ.Client;
@@ -15,6 +12,7 @@ namespace Micronetes
         {
             services.TryAddSingleton(typeof(IClientFactory<>), typeof(DefaultClientFactory<>));
             services.TryAddSingleton<IClientFactory<ConnectionMultiplexer>, StackExchangeRedisClientFactory>();
+            services.TryAddSingleton<IClientFactory<PubSubClient>, StackExchangeRedisPubSubClientFactory>();
             services.TryAddSingleton<IClientFactory<IModel>, RabbitMQClientFactory>();
             services.TryAddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
             services.TryAddSingleton<INameResolver, ConfigurationNameResolver>();
