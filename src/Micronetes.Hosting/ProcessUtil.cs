@@ -7,9 +7,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Application
+namespace Micronetes.Hosting
 {
-    public static class ProcessUtil
+    internal static class ProcessUtil
     {
         public static ProcessResult Run(
             string filename,

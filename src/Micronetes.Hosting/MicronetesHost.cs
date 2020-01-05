@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -14,53 +13,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Application
+namespace Micronetes.Hosting
 {
-    public class Program
+    public class MicronetesHost
     {
-        public static async Task Main(string[] args)
+        public static async Task RunAsync(Application application, string[] args)
         {
-            var application = new Application(new[]
-            {
-                new ServiceDescription {
-                    Name = "FrontEnd",
-                    Bindings = new List<Binding>
-                    {
-                        new Binding {
-                            Name = "default",
-                            Address = "http://localhost:7000",
-                            Protocol = "http"
-                        }
-                    }
-                },
-                new ServiceDescription {
-                    Name = "BackEnd",
-                    Bindings = new List<Binding>
-                    {
-                        new Binding {
-                            Name = "default",
-                            Address = "http://localhost:8000",
-                            Protocol = "http"
-                        }
-                    }
-                },
-                new ServiceDescription {
-                    Name = "Worker",
-                },
-                new ServiceDescription {
-                    Name = "Redis",
-                    External = true,
-                    Bindings = new List<Binding>
-                    {
-                        new Binding {
-                            Name = "default",
-                            Address = "localhost:6379",
-                            Protocol = "redis"
-                        }
-                    }
-                }
-            });
-
             var options = new JsonSerializerOptions()
             {
                 PropertyNameCaseInsensitive = true,
@@ -140,7 +98,7 @@ namespace Application
                 })
                 .Build();
 
-            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+            var logger = host.Services.GetRequiredService<ILogger<MicronetesHost>>();
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
             lifetime.ApplicationStopping.Register(() => KillRunningProcesses(application.Services));
@@ -308,51 +266,6 @@ namespace Application
             }
 
             return args;
-        }
-
-        public class Application
-        {
-            public Application(ServiceDescription[] services)
-            {
-                Services = services.ToDictionary(s => s.Name, s => new Service { Description = s });
-            }
-
-            public Dictionary<string, Service> Services { get; }
-        }
-
-        public class Service
-        {
-            public ServiceDescription Description { get; set; }
-
-            public int? Pid { get; set; }
-
-            public string State => ExitCode == null ? "Running" : "Stopped";
-
-            [JsonIgnore]
-            public Thread Thread { get; set; }
-
-            [JsonIgnore]
-            public List<string> Logs { get; } = new List<string>();
-
-            public int? ExitCode { get; set; }
-        }
-
-        public class ServiceDescription
-        {
-            public string Name { get; set; }
-            public bool External { get; set; }
-            public List<Binding> Bindings { get; set; } = new List<Binding>();
-
-            internal Binding DefaultBinding => Bindings.FirstOrDefault(b => b.IsDefault);
-        }
-
-        public class Binding
-        {
-            public string Name { get; set; }
-            public string Address { get; set; }
-            public string Protocol { get; set; }
-
-            internal bool IsDefault => Name == "default";
         }
     }
 }

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Application
+namespace Micronetes.Hosting
 {
-    public class ProcessResult
+    internal class ProcessResult
     {
         public ProcessResult(string standardOutput, string standardError, int exitCode)
         {

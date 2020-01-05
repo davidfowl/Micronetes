@@ -15,4 +15,8 @@
     <ProjectReference Include="*\*.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Micronetes.Hosting\Micronetes.Hosting.csproj" />
+  </ItemGroup>
+
 </Project>
