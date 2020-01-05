@@ -6,10 +6,14 @@ using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Filters;
 
 namespace Micronetes.Hosting
 {
@@ -24,6 +28,15 @@ namespace Micronetes.Hosting
             };
 
             using var host = Host.CreateDefaultBuilder(args)
+                .UseSerilog((context, configuration)=>
+                {
+                    configuration
+                        .Filter.ByExcluding(Matching.FromSource("Microsoft"))
+                        .Enrich
+                        .FromLogContext()
+                        .WriteTo
+                        .Console();
+                })
                 .ConfigureWebHostDefaults(web =>
                 {
                     web.Configure(app =>
@@ -99,10 +112,13 @@ namespace Micronetes.Hosting
             var logger = host.Services.GetRequiredService<ILogger<MicronetesHost>>();
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             var configuration = host.Services.GetRequiredService<IConfiguration>();
+            var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
 
             lifetime.ApplicationStopping.Register(() => KillRunningProcesses(application.Services));
 
             await host.StartAsync();
+
+            logger.LogInformation("API server running on {Addresses}", string.Join(", ", serverAddressesFeature.Addresses));
 
             try
             {
