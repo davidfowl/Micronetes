@@ -8,4 +8,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="KubernetesClient" Version="1.6.6" />
+  </ItemGroup>
+
 </Project>
