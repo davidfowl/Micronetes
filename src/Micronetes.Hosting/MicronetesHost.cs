@@ -114,7 +114,12 @@ namespace Micronetes.Hosting
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
 
-            lifetime.ApplicationStopping.Register(() => KillRunningProcesses(application.Services));
+            lifetime.ApplicationStopping.Register(() =>
+            {
+                logger.LogInformation("Shutting down...");
+
+                KillRunningProcesses(application.Services);
+            });
 
             await host.StartAsync();
 
