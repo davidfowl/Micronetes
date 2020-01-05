@@ -146,6 +146,8 @@ namespace Micronetes.Hosting
             {
                 return new KubernetesExecutionTarget(logger);
             }
+
+            // return new InProcessExecutionTarget(logger);
             return new OutOfProcessExecutionTarget(logger);
         }
     }

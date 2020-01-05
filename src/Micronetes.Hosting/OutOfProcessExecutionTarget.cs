@@ -37,7 +37,6 @@ namespace Micronetes.Hosting
             return KillRunningProcesses(application.Services);
         }
 
-
         private Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
@@ -48,7 +47,9 @@ namespace Micronetes.Hosting
 
             application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
-            service.Thread = new Thread(() =>
+            var state = new ProcessState();
+
+            state.Thread = new Thread(() =>
             {
                 _logger.LogInformation("Launching service {ServiceName}", serviceName);
 
@@ -79,13 +80,13 @@ namespace Micronetes.Hosting
                                 _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
                             }
 
-                            service.Pid = pid;
+                            state.Pid = pid;
 
                             tcs.TrySetResult(null);
                         },
                         throwOnError: false);
 
-                    service.ExitCode = result.ExitCode;
+                    state.ExitCode = result.ExitCode;
                 }
                 catch (Exception ex)
                 {
@@ -99,27 +100,26 @@ namespace Micronetes.Hosting
                 }
             });
 
-            service.Thread.Start();
+            state.Thread.Start();
+            service.Items[typeof(ProcessState)] = state;
 
             return tcs.Task;
         }
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)
         {
-            static void KillProcess(int? pid)
+            static void KillProcess(Service service)
             {
-                if (pid == null)
+                if (service.Items.TryGetValue(typeof(ProcessState), out var stateObj) && stateObj is ProcessState state)
                 {
-                    return;
-                }
+                    try
+                    {
+                        ProcessUtil.StopProcess(Process.GetProcessById(state.Pid));
+                    }
+                    catch (Exception)
+                    {
 
-                try
-                {
-                    ProcessUtil.StopProcess(Process.GetProcessById(pid.Value));
-                }
-                catch (Exception)
-                {
-
+                    }
                 }
             }
 
@@ -127,8 +127,8 @@ namespace Micronetes.Hosting
             var tasks = new Task[services.Count];
             foreach (var s in services.Values)
             {
-                var pid = s.Pid;
-                tasks[index++] = Task.Run(() => KillProcess(pid));
+                var state = s;
+                tasks[index++] = Task.Run(() => KillProcess(state));
             }
 
             return Task.WhenAll(tasks);
@@ -144,13 +144,19 @@ namespace Micronetes.Hosting
         {
             if (service.Description.Bindings.Count > 0)
             {
-                var moreArgs = service.Description.Bindings.Where(b => b.IsDefault)
-                                                           .Select(a => $"--urls={a.Address}");
-
                 return $"--urls={service.Description.DefaultBinding.Address}";
             }
 
             return string.Empty;
+        }
+
+        private class ProcessState
+        {
+            public int Pid { get; set; }
+
+            public Thread Thread { get; set; }
+
+            public int? ExitCode { get; set; }
         }
     }
 }

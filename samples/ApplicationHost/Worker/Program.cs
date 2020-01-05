@@ -14,14 +14,15 @@ namespace Worker
     {
         public static Task Main(string[] args)
         {
-            return Host.CreateDefaultBuilder(args)
+            return CreateHostBuilder(args).Build().RunAsync();
+        }
+
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
                        .ConfigureServices(services =>
                        {
                            services.AddMicronetes();
                            services.AddHostedService<QueueWorker>();
-                       })
-                       .Build()
-                       .RunAsync();
-        }
+                       });
     }
 }

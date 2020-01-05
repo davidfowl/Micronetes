@@ -8,16 +8,11 @@ namespace Micronetes.Hosting.Model
     {
         public ServiceDescription Description { get; set; }
 
-        public int? Pid { get; set; }
-
-        public string State => ExitCode == null ? "Running" : "Stopped";
-
         [JsonIgnore]
-        public Thread Thread { get; set; }
+        public Dictionary<object, object> Items { get; } = new Dictionary<object, object>();
 
         [JsonIgnore]
         public List<string> Logs { get; } = new List<string>();
 
-        public int? ExitCode { get; set; }
     }
 }
