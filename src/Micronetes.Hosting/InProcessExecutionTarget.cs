@@ -41,8 +41,8 @@ namespace Micronetes.Hosting
             var serviceName = serviceDescription.Name;
             var path = GetDllPath(serviceName);
             var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), serviceName);
-            var tcs = new TaskCompletionSource<object>();
 
+            // TODO: Run in different load context.
             var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
 
             // In theory, this could be done with an IHostingStartup but it doesn't work with
