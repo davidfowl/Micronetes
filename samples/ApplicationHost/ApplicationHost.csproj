@@ -2,13 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="*\**" />
-    <Content Remove="*\**" />
-    <EmbeddedResource Remove="*\**" />
-    <None Remove="*\**" />
+    <Compile Include="Program.cs" />
   </ItemGroup>
 
   <ItemGroup>
