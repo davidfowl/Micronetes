@@ -9,7 +9,6 @@ namespace ApplicationHost
     {
         public static async Task Main(string[] args)
         {
-            
             var application = new Application(new[]
             {
                 new ServiceDescription {
