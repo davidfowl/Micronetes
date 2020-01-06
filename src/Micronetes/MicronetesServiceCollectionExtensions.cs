@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using Grpc.Net.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RabbitMQ.Client;
@@ -15,6 +16,7 @@ namespace Micronetes
             services.TryAddSingleton<IClientFactory<PubSubClient>, StackExchangeRedisPubSubClientFactory>();
             services.TryAddSingleton<IClientFactory<IModel>, RabbitMQClientFactory>();
             services.TryAddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
+            services.TryAddSingleton<IClientFactory<GrpcChannel>, GrpcChannelClientFactory>();
             services.TryAddSingleton<INameResolver, ConfigurationNameResolver>();
             return services;
         }

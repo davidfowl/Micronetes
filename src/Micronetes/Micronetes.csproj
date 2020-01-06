@@ -9,6 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.26.0" />
     <PackageReference Include="StackExchange.Redis" Version="2.0.601" />
     <PackageReference Include="RabbitMQ.Client" Version="5.1.2" />
   </ItemGroup>
