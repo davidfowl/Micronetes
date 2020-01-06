@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Net.Sockets;
-using System.Text;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
@@ -11,11 +9,11 @@ namespace Micronetes.Hosting.Infrastructure
 {
     internal class Docker
     {
-        public static async Task RunAsync(ILogger logger, Service service)
+        public static Task RunAsync(ILogger logger, Service service)
         {
             if (service.Description.DockerImage == null)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             var environmentArguments = "";
@@ -48,8 +46,23 @@ namespace Micronetes.Hosting.Infrastructure
 
             dockerInfo.LogsThread = new Thread(() =>
             {
-                // ProcessUtil.Run("docker", "logs -f");
+                ProcessUtil.Run("docker", $"logs -f {containerId}",
+                    outputDataReceived: data =>
+                    {
+                        if (data != null)
+                        {
+                            service.Logs.Add(data);
+                        }
+                    },
+                    onStart: pid =>
+                    {
+                        dockerInfo.LogsPid = pid;
+                    });
             });
+
+            dockerInfo.LogsThread.Start();
+
+            return Task.CompletedTask;
         }
 
         public static void Stop(ILogger logger, Service service)
@@ -66,6 +79,15 @@ namespace Micronetes.Hosting.Infrastructure
                 {
                     logger.LogError(0, ex, "Failed to stop container {ContainerId}", di.ShortContainerId);
                 }
+
+                try
+                {
+                    ProcessUtil.StopProcess(Process.GetProcessById(di.LogsPid));
+                }
+                catch
+                {
+
+                }
             }
         }
 
@@ -74,6 +96,7 @@ namespace Micronetes.Hosting.Infrastructure
             public string ContainerId { get; set; }
             public string ShortContainerId { get; set; }
             public Thread LogsThread { get; set; }
+            public int LogsPid { get; set; }
         }
     }
 }
