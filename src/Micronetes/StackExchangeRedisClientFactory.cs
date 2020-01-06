@@ -28,8 +28,9 @@ namespace Micronetes
 
             return _clients.GetOrAdd(name, n =>
             {
+                var uri = new Uri(binding.Address);
                 // REVIEW: What about async? Do we make sure that clients all have a an explicit Connect
-                return ConnectionMultiplexer.Connect(binding.Address);
+                return ConnectionMultiplexer.Connect(uri.Host + ":" + uri.Port);
             });
         }
 

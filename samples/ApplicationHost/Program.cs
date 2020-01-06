@@ -33,6 +33,20 @@ namespace ApplicationHost
                         }
                     }
                 },
+                new ServiceDescription
+                {
+                    Name = "Rabbit",
+                    DockerImage = "rabbitmq",
+                    Bindings = new List<ServiceBinding>
+                    {
+                        new ServiceBinding
+                        {
+                            Name = "default",
+                            Address = "tcp://localhost:5672",
+                            Protocol = "rabbitmq" // amqp?
+                        }
+                    }
+                },
                 new ServiceDescription {
                     Name = "Worker",
                     Configuration = new Dictionary<string, string>
@@ -52,20 +66,6 @@ namespace ApplicationHost
                         }
                     }
                 },
-                new ServiceDescription
-                {
-                    Name = "Rabbit",
-                    DockerImage = "rabbitmq",
-                    Bindings = new List<ServiceBinding>
-                    {
-                        new ServiceBinding
-                        {
-                            Name = "default",
-                            Address = "tcp://localhost:5672",
-                            Protocol = "rabbitmq" // amqp?
-                        }
-                    }
-                }
             });
 
             await MicronetesHost.RunAsync(application, args);

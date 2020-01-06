@@ -24,7 +24,7 @@ namespace Micronetes
             }
 
             // This should be host:port
-            var uri = new Uri($"amqp://{binding.Address}");
+            var uri = new Uri(binding.Address);
 
             return _clients.GetOrAdd(name, n =>
             {
