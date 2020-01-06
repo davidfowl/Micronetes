@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="*\*.csproj" />
+    <ProjectReference Include="*\*.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="Never" />
   </ItemGroup>
 
   <ItemGroup>
