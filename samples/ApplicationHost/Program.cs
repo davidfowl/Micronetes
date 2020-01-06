@@ -35,6 +35,10 @@ namespace ApplicationHost
                 },
                 new ServiceDescription {
                     Name = "Worker",
+                    Configuration = new Dictionary<string, string>
+                    {
+                        { "key", "value" }
+                    }
                 },
                 new ServiceDescription {
                     Name = "Redis",

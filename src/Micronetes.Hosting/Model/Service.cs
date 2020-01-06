@@ -13,6 +13,5 @@ namespace Micronetes.Hosting.Model
 
         [JsonIgnore]
         public List<string> Logs { get; } = new List<string>();
-
     }
 }
