@@ -95,7 +95,7 @@ namespace Micronetes.Hosting
                 }
                 finally
                 {
-                    _logger.LogInformation("{ServiceName} process exited", serviceName);
+                    _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, state.ExitCode);
 
                     tcs.TrySetResult(null);
                 }
