@@ -108,14 +108,24 @@ namespace Micronetes.Hosting
         {
             var tasks = new Task[application.Services.Count];
             var index = 0;
-            var hosts = new List<IHost>();
+
+            async Task ShutdownAsync(IHost host)
+            {
+                try
+                {
+                    await host.StopAsync();
+                }
+                finally
+                {
+                    await (host as IAsyncDisposable).DisposeAsync();
+                }
+            }
 
             foreach (var service in application.Services.Values)
             {
                 if (service.Items.TryGetValue(typeof(IHost), out var hostObj) && hostObj is IHost host)
                 {
-                    hosts.Add(host);
-                    tasks[index++] = host.StopAsync();
+                    tasks[index++] = ShutdownAsync(host);
                 }
                 else if (service.Description.DockerImage != null)
                 {
@@ -129,8 +139,6 @@ namespace Micronetes.Hosting
             }
 
             await Task.WhenAll(tasks);
-
-            hosts.ForEach(h => h.Dispose());
         }
 
         private static string GetDllPath(string serviceName)
