@@ -30,7 +30,7 @@ namespace ApplicationHost
                         new ServiceBinding {
                             Name = "default",
                             Address = "http://localhost:8000",
-                            Protocol = "http"
+                            Protocol = "grpc"
                         }
                     }
                 },

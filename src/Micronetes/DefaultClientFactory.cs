@@ -24,7 +24,6 @@ namespace Micronetes
             switch (binding.Protocol?.ToLower())
             {
                 case "grpc":
-                case "http":
                 case null:
                     return _clients.GetOrAdd(name, k => GrpcChannel.ForAddress(binding.Address).CreateGrpcService<TClient>());
                 default:
@@ -33,7 +32,7 @@ namespace Micronetes
             }
 
 
-            throw new NotSupportedException();
+            throw new NotSupportedException($"{name} exposes protocol {binding.Protocol} which has no support for {typeof(TClient)}");
         }
     }
 }
