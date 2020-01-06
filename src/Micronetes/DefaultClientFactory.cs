@@ -10,6 +10,12 @@ namespace Micronetes
         private readonly ConcurrentDictionary<string, TClient> _clients = new ConcurrentDictionary<string, TClient>(StringComparer.OrdinalIgnoreCase);
         private readonly INameResolver _nameResolver;
 
+        static DefaultClientFactory()
+        {
+            // A little leaky...
+            GrpcClientFactory.AllowUnencryptedHttp2 = true;
+        }
+
         public DefaultClientFactory(INameResolver nameResolver)
         {
             _nameResolver = nameResolver;
