@@ -2,15 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Runtime.Loader;
+using System.Threading;
 using System.Threading.Tasks;
+using Micronetes.Hosting.Infrastructure;
 using Micronetes.Hosting.Model;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Configuration;
-using Microsoft.AspNetCore.Hosting;
-using System.Threading;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Micronetes.Hosting
 {
@@ -38,6 +38,12 @@ namespace Micronetes.Hosting
         private Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
+
+            if (serviceDescription.DockerImage != null)
+            {
+                return Docker.RunAsync(_logger, service);
+            }
+
             var serviceName = serviceDescription.Name;
             var path = GetDllPath(serviceName);
             var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), serviceName);
@@ -111,6 +117,11 @@ namespace Micronetes.Hosting
                     hosts.Add(host);
                     tasks[index++] = host.StopAsync();
                 }
+                else if (service.Description.DockerImage != null)
+                {
+                    Docker.Stop(_logger, service);
+                    tasks[index++] = Task.CompletedTask;
+                }
                 else
                 {
                     tasks[index++] = Task.CompletedTask;
@@ -157,7 +168,7 @@ namespace Micronetes.Hosting
 
             public void Dispose()
             {
-                
+
             }
 
             private class Logger : ILogger

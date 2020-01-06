@@ -42,12 +42,12 @@ namespace ApplicationHost
                 },
                 new ServiceDescription {
                     Name = "Redis",
-                    External = true,
+                    DockerImage = "redis",
                     Bindings = new List<ServiceBinding>
                     {
                         new ServiceBinding {
                             Name = "default",
-                            Address = "localhost:6379",
+                            Address = "tcp://localhost:6379",
                             Protocol = "redis"
                         }
                     }
@@ -55,13 +55,13 @@ namespace ApplicationHost
                 new ServiceDescription
                 {
                     Name = "Rabbit",
-                    External = true,
+                    DockerImage = "rabbitmq",
                     Bindings = new List<ServiceBinding>
                     {
                         new ServiceBinding
                         {
                             Name = "default",
-                            Address = "localhost:5672",
+                            Address = "tcp://localhost:5672",
                             Protocol = "rabbitmq" // amqp?
                         }
                     }

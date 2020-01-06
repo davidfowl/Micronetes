@@ -33,7 +33,7 @@ namespace Micronetes.Hosting
             {
                 var description = s.Description;
 
-                // Skip this for now
+                // Skip external services
                 if (description.External)
                 {
                     continue;
@@ -41,6 +41,7 @@ namespace Micronetes.Hosting
 
                 if (description.Bindings.Count > 0)
                 {
+                    // REVIEW: Deleting before creating might be too aggressive
                     try
                     {
                         await _kubernetes.DeleteNamespacedServiceWithHttpMessagesAsync(description.Name.ToLower(), "default");
@@ -80,7 +81,7 @@ namespace Micronetes.Hosting
                     {
                         if (ex.Response.StatusCode != HttpStatusCode.Conflict)
                         {
-                            _logger.LogError(0, ex, "Failed to create service for {ServiceName}", description.Name);
+                            _logger.LogError(0, ex, ex.Response.Content);
                             throw;
                         }
                     }
@@ -132,7 +133,7 @@ namespace Micronetes.Hosting
                                 {
                                     new k8s.Models.V1Container
                                     {
-                                        Image = "davidfowl/featherweb", // TODO: Build image and push somewhere...
+                                        Image = description.DockerImage ?? "davidfowl/featherweb", // TODO: Build image and push somewhere...
                                         Name = description.Name.ToLower(),
                                         Env = BuildEnvironment(application, s)
                                     }
@@ -152,7 +153,7 @@ namespace Micronetes.Hosting
                 {
                     if (ex.Response.StatusCode != HttpStatusCode.Conflict)
                     {
-                        _logger.LogError(0, ex, "Failed to create deployment for {ServiceName}", description.Name);
+                        _logger.LogError(0, ex, ex.Response.Content);
                         throw;
                     }
                 }
@@ -183,6 +184,7 @@ namespace Micronetes.Hosting
                     {
                         if (ex.Response.StatusCode != HttpStatusCode.NotFound)
                         {
+                            _logger.LogError(0, ex, ex.Response.Content);
                             throw;
                         }
                     }
@@ -200,6 +202,7 @@ namespace Micronetes.Hosting
                 {
                     if (ex.Response.StatusCode != HttpStatusCode.NotFound)
                     {
+                        _logger.LogError(0, ex, ex.Response.Content);
                         throw;
                     }
                 }
@@ -212,8 +215,7 @@ namespace Micronetes.Hosting
 
             foreach (var b in bindings)
             {
-                if (Uri.TryCreate(b.Address, UriKind.Absolute, out var uri) ||
-                    Uri.TryCreate("svc://" + b.Address, UriKind.Absolute, out uri))
+                if (Uri.TryCreate(b.Address, UriKind.Absolute, out var uri))
                 {
                     ports.Add(new k8s.Models.V1ServicePort(uri.Port));
                 }
@@ -226,10 +228,13 @@ namespace Micronetes.Hosting
         {
             var env = new List<V1EnvVar>();
 
-            var defaultBinding = service.Description.DefaultBinding;
-            if (defaultBinding != null)
+            if (service.Description.DockerImage == null)
             {
-                env.Add(new V1EnvVar("ASPNETCORE_URLS", defaultBinding.Address));
+                var defaultBinding = service.Description.DefaultBinding;
+                if (defaultBinding != null)
+                {
+                    env.Add(new V1EnvVar("ASPNETCORE_URLS", defaultBinding.Address));
+                }
             }
 
             application.PopulateEnvironment(service, (k, v) =>

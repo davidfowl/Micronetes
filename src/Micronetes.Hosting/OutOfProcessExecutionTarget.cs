@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Micronetes.Hosting.Infrastructure;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
@@ -40,6 +41,12 @@ namespace Micronetes.Hosting
         private Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
+
+            if (serviceDescription.DockerImage != null)
+            {
+                return Docker.RunAsync(_logger, service);
+            }
+
             var serviceName = serviceDescription.Name;
             var path = GetExePath(serviceName);
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -109,7 +116,7 @@ namespace Micronetes.Hosting
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)
         {
-            static void KillProcess(Service service)
+            void KillProcess(Service service)
             {
                 if (service.Items.TryGetValue(typeof(ProcessState), out var stateObj) && stateObj is ProcessState state)
                 {
@@ -121,6 +128,10 @@ namespace Micronetes.Hosting
                     {
 
                     }
+                }
+                else if (service.Description.DockerImage != null)
+                {
+                    Docker.Stop(_logger, service);
                 }
             }
 

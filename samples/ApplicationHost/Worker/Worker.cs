@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,27 +22,59 @@ namespace Worker
             _queueFactory = queueFactory;
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
-            var queue = _queueFactory.CreateClient("Rabbit");
-
-            queue.QueueDeclare(queue: "orders",
-                                 durable: false,
-                                 exclusive: false,
-                                 autoDelete: false,
-                                 arguments: null);
-
-            var consumer = new EventingBasicConsumer(queue);
-            consumer.Received += (model, ea) =>
+            try
             {
-                _logger.LogInformation("Dequeued " + Encoding.UTF8.GetString(ea.Body));
-            };
+                IModel queue = await ConnectAsync();
 
-            queue.BasicConsume(queue: "orders",
-                                 autoAck: true,
-                                 consumer: consumer);
+                queue.QueueDeclare(queue: "orders",
+                                     durable: false,
+                                     exclusive: false,
+                                     autoDelete: false,
+                                     arguments: null);
 
-            return Task.CompletedTask;
+                var consumer = new EventingBasicConsumer(queue);
+                consumer.Received += (model, ea) =>
+                {
+                    _logger.LogInformation("Dequeued " + Encoding.UTF8.GetString(ea.Body));
+                };
+
+                queue.BasicConsume(queue: "orders",
+                                     autoAck: true,
+                                     consumer: consumer);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(0, ex, "Failed to start listening to rabbit mq");
+
+                throw;
+            }
+        }
+        private async Task<IModel> ConnectAsync()
+        {
+            ExceptionDispatchInfo edi = null;
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    return _queueFactory.CreateClient("Rabbit");
+                }
+                catch (Exception ex)
+                {
+                    if (i == 4)
+                    {
+                        edi = ExceptionDispatchInfo.Capture(ex);
+                    }
+
+                    _logger.LogError(0, ex, "Failed to start listening to rabbit mq");
+                }
+
+                await Task.Delay(5000);
+            }
+
+            edi.Throw();
+            return null;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
