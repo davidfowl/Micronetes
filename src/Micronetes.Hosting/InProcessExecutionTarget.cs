@@ -187,11 +187,11 @@ namespace Micronetes.Hosting
                     {
                         if (exception != null)
                         {
-                            _service.Logs.Add(exception.ToString());
+                            _service.Logs.Add($"[{logLevel}]: " + exception.ToString());
                         }
                         else
                         {
-                            _service.Logs.Add(formatter(state, exception));
+                            _service.Logs.Add($"[{logLevel}]: " + formatter(state, exception));
                         }
                     }
                 }
