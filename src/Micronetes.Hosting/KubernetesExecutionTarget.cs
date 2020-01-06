@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using k8s;
 using k8s.Models;
@@ -14,18 +13,21 @@ namespace Micronetes.Hosting
     public class KubernetesExecutionTarget : IExecutionTarget
     {
         private readonly ILogger _logger;
+        private readonly Kubernetes _kubernetes;
+        private readonly string _currentContext;
 
         public KubernetesExecutionTarget(ILogger logger)
         {
             _logger = logger;
+            var config = KubernetesClientConfiguration.BuildDefaultConfig();
+            _currentContext = config.CurrentContext;
+            _kubernetes = new Kubernetes(config);
+
         }
 
         public async Task StartAsync(Application application)
         {
-            var config = KubernetesClientConfiguration.BuildDefaultConfig();
-            var klient = new Kubernetes(config);
-
-            _logger.LogInformation("Using k8s context: " + config.CurrentContext);
+            _logger.LogInformation("Using k8s context: {Context}", _currentContext);
 
             foreach (var s in application.Services.Values)
             {
@@ -41,7 +43,7 @@ namespace Micronetes.Hosting
                 {
                     try
                     {
-                        await klient.DeleteNamespacedServiceWithHttpMessagesAsync(description.Name.ToLower(), "default");
+                        await _kubernetes.DeleteNamespacedServiceWithHttpMessagesAsync(description.Name.ToLower(), "default");
                     }
                     catch (HttpOperationException ex)
                     {
@@ -60,10 +62,7 @@ namespace Micronetes.Hosting
                         },
                         Spec = new k8s.Models.V1ServiceSpec
                         {
-                            Ports = new List<k8s.Models.V1ServicePort>
-                            {
-                                new k8s.Models.V1ServicePort(80)
-                            },
+                            Ports = BuildServicePorts(description.Bindings),
                             Selector = new Dictionary<string, string>
                             {
                                 { "app", description.Name.ToLower() }
@@ -73,12 +72,15 @@ namespace Micronetes.Hosting
 
                     try
                     {
-                        await klient.CreateNamespacedServiceWithHttpMessagesAsync(service, "default");
+                        var response = await _kubernetes.CreateNamespacedServiceAsync(service, "default");
+
+                        _logger.LogInformation("Created service {Name}", response.Metadata.Name);
                     }
                     catch (HttpOperationException ex)
                     {
                         if (ex.Response.StatusCode != HttpStatusCode.Conflict)
                         {
+                            _logger.LogError(0, ex, "Failed to create service for {ServiceName}", description.Name);
                             throw;
                         }
                     }
@@ -88,7 +90,7 @@ namespace Micronetes.Hosting
 
                 try
                 {
-                    await klient.DeleteNamespacedDeploymentAsync(description.Name.ToLower(), "default");
+                    var response = await _kubernetes.DeleteNamespacedDeploymentAsync(description.Name.ToLower(), "default");
                 }
                 catch (HttpOperationException ex)
                 {
@@ -140,16 +142,25 @@ namespace Micronetes.Hosting
                     }
                 };
 
-                await klient.CreateNamespacedDeploymentAsync(deployment, "default");
+                try
+                {
+                    var response = await _kubernetes.CreateNamespacedDeploymentAsync(deployment, "default");
 
+                    _logger.LogInformation("Created deployment {Name}", response.Metadata.Name);
+                }
+                catch (HttpOperationException ex)
+                {
+                    if (ex.Response.StatusCode != HttpStatusCode.Conflict)
+                    {
+                        _logger.LogError(0, ex, "Failed to create deployment for {ServiceName}", description.Name);
+                        throw;
+                    }
+                }
             }
         }
 
         public async Task StopAsync(Application application)
         {
-            var config = KubernetesClientConfiguration.BuildDefaultConfig();
-            var klient = new Kubernetes(config);
-
             foreach (var s in application.Services.Values)
             {
                 var description = s.Description;
@@ -164,7 +175,9 @@ namespace Micronetes.Hosting
                 {
                     try
                     {
-                        await klient.DeleteNamespacedServiceWithHttpMessagesAsync(description.Name.ToLower(), "default");
+                        var response = await _kubernetes.DeleteNamespacedServiceAsync(description.Name.ToLower(), "default");
+
+                        _logger.LogInformation("Deleted service {Name}", description.Name.ToLower());
                     }
                     catch (HttpOperationException ex)
                     {
@@ -179,7 +192,9 @@ namespace Micronetes.Hosting
 
                 try
                 {
-                    await klient.DeleteNamespacedDeploymentAsync(description.Name.ToLower(), "default");
+                    var response = await _kubernetes.DeleteNamespacedDeploymentAsync(description.Name.ToLower(), "default");
+
+                    _logger.LogInformation("Deleted deployment {Name}", description.Name.ToLower());
                 }
                 catch (HttpOperationException ex)
                 {
@@ -191,9 +206,31 @@ namespace Micronetes.Hosting
             }
         }
 
+        private IList<V1ServicePort> BuildServicePorts(List<ServiceBinding> bindings)
+        {
+            var ports = new List<k8s.Models.V1ServicePort>();
+
+            foreach (var b in bindings)
+            {
+                if (Uri.TryCreate(b.Address, UriKind.Absolute, out var uri) ||
+                    Uri.TryCreate("svc://" + b.Address, UriKind.Absolute, out uri))
+                {
+                    ports.Add(new k8s.Models.V1ServicePort(uri.Port));
+                }
+            }
+
+            return ports;
+        }
+
         private static IList<V1EnvVar> BuildEnvironment(Application application, Service service)
         {
             var env = new List<V1EnvVar>();
+
+            var defaultBinding = service.Description.DefaultBinding;
+            if (defaultBinding != null)
+            {
+                env.Add(new V1EnvVar("ASPNETCORE_URLS", defaultBinding.Address));
+            }
 
             application.PopulateEnvironment(service, (k, v) =>
             {
