@@ -146,8 +146,11 @@ namespace Micronetes.Hosting
             {
                 return new KubernetesExecutionTarget(logger);
             }
+            else if (args.Contains("--inprocess"))
+            {
+                return new InProcessExecutionTarget(logger);
+            }
 
-            // return new InProcessExecutionTarget(logger);
             return new OutOfProcessExecutionTarget(logger);
         }
     }

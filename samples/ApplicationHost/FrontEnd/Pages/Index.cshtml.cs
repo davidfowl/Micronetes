@@ -4,11 +4,11 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using FrontEnd.Models;
 using Micronetes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
+using Shared.Contracts;
 
 namespace FrontEnd.Pages
 {
@@ -26,18 +26,17 @@ namespace FrontEnd.Pages
 
         }
 
-        public async Task<IActionResult> OnPost([FromServices]IClientFactory<HttpClient> clientFactory)
+        public async Task<IActionResult> OnPost([FromServices]IClientFactory<IOrderService> clientFactory)
         {
             var client = clientFactory.CreateClient("backend");
-            var order = JsonSerializer.Serialize(new Order
+            var order = new Order
             {
                 OrderId = Guid.NewGuid(),
                 CreatedTime = DateTime.UtcNow,
                 UserId = User.Identity.Name
-            });
+            };
 
-            var response = await client.PostAsync("/orders", new StringContent(order));
-            response.EnsureSuccessStatusCode();
+            await client.PlaceOrderAsync(order);
 
             return Redirect("/");
         }

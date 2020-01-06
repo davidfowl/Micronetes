@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Text;
-using Microsoft.Extensions.Configuration;
+using Grpc.Net.Client;
+using ProtoBuf.Grpc.Client;
 
 namespace Micronetes
 {
-    public class DefaultClientFactory<TClient> : IClientFactory<TClient>
+    public class DefaultClientFactory<TClient> : IClientFactory<TClient> where TClient : class
     {
         private readonly ConcurrentDictionary<string, TClient> _clients = new ConcurrentDictionary<string, TClient>(StringComparer.OrdinalIgnoreCase);
         private readonly INameResolver _nameResolver;
@@ -24,7 +23,12 @@ namespace Micronetes
 
             switch (binding.Protocol?.ToLower())
             {
+                case "grpc":
+                case "http":
+                case null:
+                    return _clients.GetOrAdd(name, k => GrpcChannel.ForAddress(binding.Address).CreateGrpcService<TClient>());
                 default:
+                    // Default to GRPC if the TClient is a service contract
                     break;
             }
 

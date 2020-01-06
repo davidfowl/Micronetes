@@ -64,7 +64,7 @@ namespace Micronetes.Hosting
 
             hostBuilder.ConfigureLogging(logging =>
             {
-                // logging.ClearProviders();
+                logging.ClearProviders();
                 logging.AddProvider(new ServiceLoggerProvider(service));
             });
 

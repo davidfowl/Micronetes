@@ -6,7 +6,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Micronetes\Micronetes.csproj" />
+    <ProjectReference Include="..\Shared.Contracts\Shared.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="protobuf-net.Grpc.AspNetCore" Version="1.0.21" />
+  </ItemGroup>
 
 </Project>
