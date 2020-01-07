@@ -35,13 +35,14 @@ namespace Micronetes.Hosting
             return Task.WhenAll(tasks);
         }
 
-        private Task LaunchService(Application application, Service service)
+        private async Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
 
             if (serviceDescription.DockerImage != null)
             {
-                return Docker.RunAsync(_logger, service);
+                await Docker.RunAsync(_logger, service);
+                return;
             }
 
             var serviceName = serviceDescription.Name;
@@ -63,7 +64,7 @@ namespace Micronetes.Hosting
             if (createHostBuilderMethod == null)
             {
                 _logger.LogError("{Type} must have a CreateHostBuilder method.", assembly.EntryPoint?.DeclaringType);
-                return Task.CompletedTask;
+                return;
             }
 
             _logger.LogInformation("Running {assembly} in process", assembly);
@@ -105,7 +106,9 @@ namespace Micronetes.Hosting
 
             service.Items[typeof(IHost)] = host;
 
-            return host.StartAsync();
+            await host.StartAsync();
+
+            service.State = ServiceState.Running;
         }
 
 
@@ -126,6 +129,8 @@ namespace Micronetes.Hosting
                 {
                     await (host as IAsyncDisposable).DisposeAsync();
                 }
+
+                service.State = ServiceState.Stopped;
             }
 
             foreach (var service in application.Services.Values)
