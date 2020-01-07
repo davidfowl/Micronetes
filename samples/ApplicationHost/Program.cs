@@ -10,7 +10,7 @@ namespace ApplicationHost
     {
         public static async Task Main(string[] args)
         {
-            var application = Application.FromYaml("app.yaml");
+            var application = Application.FromYaml("../app.yaml");
             await MicronetesHost.RunAsync(application, args);
         }
     }
