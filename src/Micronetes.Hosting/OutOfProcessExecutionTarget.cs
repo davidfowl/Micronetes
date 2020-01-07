@@ -48,7 +48,8 @@ namespace Micronetes.Hosting
             }
 
             var serviceName = serviceDescription.Name;
-            var path = GetExePath(serviceName);
+            var path = GetExePath(serviceDescription);
+            var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile));
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             var environment = new Dictionary<string, string>();
             var args = service.Description.Bindings.Count > 0 ? $"--urls={service.Description.DefaultBinding.Address}" : "";
@@ -65,7 +66,7 @@ namespace Micronetes.Hosting
                 {
                     var result = ProcessUtil.Run(path, args,
                         environmentVariables: environment,
-                        workingDirectory: Path.Combine(Directory.GetCurrentDirectory(), serviceName),
+                        workingDirectory: contentRoot,
                         outputDataReceived: data =>
                         {
                             if (data == null)
@@ -146,10 +147,11 @@ namespace Micronetes.Hosting
             return Task.WhenAll(tasks);
         }
 
-        private static string GetExePath(string serviceName)
+        private static string GetExePath(ServiceDescription serviceDescription)
         {
-            // TODO: How do we determine the output path? Assembly attribute compiled in by the build system?
-            return Path.Combine(Directory.GetCurrentDirectory(), serviceName, "bin", "Debug", "netcoreapp3.1", serviceName + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : ""));
+            // TODO: Use msbuild to get the target path
+            var outputFileName = Path.GetFileNameWithoutExtension(serviceDescription.ProjectFile) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
+            return Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
         private class ProcessState

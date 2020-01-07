@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Micronetes.Hosting;
 using Micronetes.Hosting.Model;
@@ -12,7 +13,8 @@ namespace ApplicationHost
             var application = new Application(new[]
             {
                 new ServiceDescription {
-                    Name = "FrontEnd",
+                    Name = "frontend",
+                    ProjectFile = Path.Combine("FrontEnd", "FrontEnd.csproj"),
                     Bindings = new List<ServiceBinding>
                     {
                         new ServiceBinding {
@@ -23,7 +25,8 @@ namespace ApplicationHost
                     }
                 },
                 new ServiceDescription {
-                    Name = "BackEnd",
+                    Name = "backend",
+                    ProjectFile = Path.Combine("BackEnd", "BackEnd.csproj"),
                     Bindings = new List<ServiceBinding>
                     {
                         new ServiceBinding {
@@ -35,7 +38,7 @@ namespace ApplicationHost
                 },
                 new ServiceDescription
                 {
-                    Name = "Rabbit",
+                    Name = "rabbit",
                     DockerImage = "rabbitmq",
                     Bindings = new List<ServiceBinding>
                     {
@@ -48,14 +51,15 @@ namespace ApplicationHost
                     }
                 },
                 new ServiceDescription {
-                    Name = "Worker",
+                    Name = "worker",
+                    ProjectFile = Path.Combine("Worker", "Worker.csproj"),
                     Configuration = new Dictionary<string, string>
                     {
                         { "key", "value" }
                     }
                 },
                 new ServiceDescription {
-                    Name = "Redis",
+                    Name = "redis",
                     DockerImage = "redis",
                     Bindings = new List<ServiceBinding>
                     {

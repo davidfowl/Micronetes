@@ -45,8 +45,8 @@ namespace Micronetes.Hosting
             }
 
             var serviceName = serviceDescription.Name;
-            var path = GetDllPath(serviceName);
-            var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), serviceName);
+            var path = GetDllPath(serviceDescription);
+            var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile));
 
             // TODO: Run in different load context.
             var assembly = Assembly.LoadFrom(path);
@@ -141,10 +141,11 @@ namespace Micronetes.Hosting
             await Task.WhenAll(tasks);
         }
 
-        private static string GetDllPath(string serviceName)
+        private static string GetDllPath(ServiceDescription serviceDescription)
         {
-            // TODO: How do we determine the output path? Assembly attribute compiled in by the build system?
-            return Path.Combine(Directory.GetCurrentDirectory(), serviceName, "bin", "Debug", "netcoreapp3.1", serviceName + ".dll");
+            // TODO: Use msbuild to get the target path
+            var outputFileName = Path.GetFileNameWithoutExtension(serviceDescription.ProjectFile) + ".dll";
+            return Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
         private class NoopLifetime : IHostLifetime
