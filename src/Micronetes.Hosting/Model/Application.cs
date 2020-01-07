@@ -9,6 +9,8 @@ namespace Micronetes.Hosting.Model
 {
     public class Application
     {
+        public string ContextDirectory { get; set; } = Directory.GetCurrentDirectory();
+
         public Application(ServiceDescription[] services)
         {
             Services = services.ToDictionary(s => s.Name, s => new Service { Description = s });
@@ -16,13 +18,19 @@ namespace Micronetes.Hosting.Model
 
         public static Application FromYaml(string path) 
         {
+            var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
+
             var deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .Build();
 
             var descriptions = deserializer.Deserialize<ServiceDescription[]>(new StringReader(File.ReadAllText(path)));
 
-            return new Application(descriptions);
+            return new Application(descriptions)
+            {
+                // Use the file location as the context when loading from a file
+                ContextDirectory = Path.GetDirectoryName(fullPath)
+            };
         }
 
         public Dictionary<string, Service> Services { get; }

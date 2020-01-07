@@ -46,7 +46,7 @@ namespace Micronetes.Hosting
             }
 
             var serviceName = serviceDescription.Name;
-            var fullProjectPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), serviceDescription.ProjectFile));
+            var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.ProjectFile));
             var path = GetExePath(fullProjectPath);
             var contentRoot = Path.GetDirectoryName(fullProjectPath);
             var environment = new Dictionary<string, string>();

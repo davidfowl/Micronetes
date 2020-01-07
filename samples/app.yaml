@@ -1,11 +1,11 @@
 - name: frontend
-  projectFile: ../FrontEnd/FrontEnd.csproj
+  projectFile: FrontEnd/FrontEnd.csproj
   bindings:
     - name: default
       address: http://localhost:7000
       protocol: http
 - name: backend
-  projectFile: ../BackEnd/BackEnd.csproj
+  projectFile: BackEnd/BackEnd.csproj
   bindings:
     - name: default
       address: http://localhost:8000
@@ -17,7 +17,7 @@
       address: tcp://localhost:5672
       protocol: rabbitmq
 - name: worker
-  projectFile: ../Worker/Worker.csproj
+  projectFile: Worker/Worker.csproj
 - name: redis
   dockerImage: redis
   bindings:
