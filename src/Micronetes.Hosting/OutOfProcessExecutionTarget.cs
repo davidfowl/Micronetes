@@ -75,52 +75,43 @@ namespace Micronetes.Hosting
 
                     _logger.LogInformation("Launching service {ServiceName}", serviceName);
 
-                    try
-                    {
-                        var result = ProcessUtil.Run(path, args,
-                            environmentVariables: environment,
-                            workingDirectory: contentRoot,
-                            outputDataReceived: data =>
+                    var result = ProcessUtil.Run(path, args,
+                        environmentVariables: environment,
+                        workingDirectory: contentRoot,
+                        outputDataReceived: data =>
+                        {
+                            if (data == null)
                             {
-                                if (data == null)
-                                {
-                                    return;
-                                }
+                                return;
+                            }
 
-                                service.Logs.Add(data);
-                            },
-                            onStart: pid =>
+                            service.Logs.Add(data);
+                        },
+                        onStart: pid =>
+                        {
+                            service.State = ServiceState.Running;
+
+                            var defaultBinding = service.Description.DefaultBinding;
+
+                            if (defaultBinding == null)
                             {
-                                service.State = ServiceState.Running;
+                                _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                            }
+                            else
+                            {
+                                _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
+                            }
 
-                                var defaultBinding = service.Description.DefaultBinding;
+                            status["pid"] = pid;
+                        },
+                        throwOnError: false,
+                        cancellationToken: state.StoppedTokenSource.Token);
 
-                                if (defaultBinding == null)
-                                {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
-                                }
-                                else
-                                {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
-                                }
+                    status["exitCode"] = result.ExitCode;
+                    service.State = ServiceState.NotRunning;
 
-                                status["pid"] = pid;
-                            },
-                            throwOnError: false,
-                            cancellationToken: state.StoppedTokenSource.Token);
-
-                        status["exitCode"] = result.ExitCode;
-                        service.State = ServiceState.NotRunning;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(0, ex, "{ServiceName} Failed to launch", serviceName);
-                    }
-                    finally
-                    {
-                        restarts++;
-                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
-                    }
+                    restarts++;
+                    _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
 
                     // Remove the replica from the set
                     service.Replicas.Remove(replica);
@@ -135,7 +126,7 @@ namespace Micronetes.Hosting
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)
         {
-            void KillProcess(Service service)
+            static void KillProcess(Service service)
             {
                 if (service.Items.TryGetValue(typeof(ProcessState), out var stateObj) && stateObj is ProcessState state)
                 {
