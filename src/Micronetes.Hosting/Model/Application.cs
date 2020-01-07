@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -29,6 +30,26 @@ namespace Micronetes.Hosting.Model
             return new Application(descriptions)
             {
                 // Use the file location as the context when loading from a file
+                ContextDirectory = Path.GetDirectoryName(fullPath)
+            };
+        }
+
+        public static Application FromProject(string path)
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
+
+            return new Application(new ServiceDescription[0])
+            {
+                ContextDirectory = Path.GetDirectoryName(fullPath)
+            };
+        }
+
+        public static Application FromSolution(string path)
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
+
+            return new Application(new ServiceDescription[0])
+            {
                 ContextDirectory = Path.GetDirectoryName(fullPath)
             };
         }

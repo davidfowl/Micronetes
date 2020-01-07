@@ -4,6 +4,7 @@ using System.CommandLine.Builder;
 using System.CommandLine.Invocation;
 using System.CommandLine.Rendering;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Micronetes.Hosting;
@@ -18,6 +19,7 @@ namespace Micronetes.Host
             var command = new RootCommand();
 
             command.Add(RunCommand(args));
+            command.Add(NewCommand());
 
             command.Description = "Process manager and orchestrator for microservices.";
 
@@ -39,6 +41,23 @@ namespace Micronetes.Host
             return await parser.InvokeAsync(args);
         }
 
+        private static Command NewCommand()
+        {
+            var command = new Command("new", "create a manifest")
+            {
+            };
+
+            command.Handler = CommandHandler.Create<IConsole>((console) =>
+            {
+                File.WriteAllText("app.yaml", @"- name: app
+  projectFile: app.csproj
+  ");
+                console.Out.WriteLine("Created \"app.yaml\"");
+            });
+
+            return command;
+        }
+
         private static Command RunCommand(string[] args)
         {
             var command = new Command("run", "run the application")
@@ -47,23 +66,55 @@ namespace Micronetes.Host
 
             var argument = new Argument("manifest")
             {
-                Arity = ArgumentArity.ExactlyOne
+                Arity = ArgumentArity.ZeroOrOne
             };
+
+            command.AddOption(new Option("--inprocess")
+            {
+                Required = false
+            });
+
+            command.AddOption(new Option("--k8s")
+            {
+                Required = false
+            });
 
             command.AddArgument(argument);
 
             command.Handler = CommandHandler.Create<IConsole, string>((console, manifest) =>
             {
-                if (!File.Exists(manifest))
-                {
-                    throw new InvalidOperationException($"{manifest} does not exist");
-                }
-
-                var app = Application.FromYaml(manifest);
+                Application app = ResolveApplication(manifest);
                 return MicronetesHost.RunAsync(app, args);
             });
 
             return command;
+        }
+
+        private static Application ResolveApplication(string manifest)
+        {
+            if (string.IsNullOrEmpty(manifest))
+            {
+                var files = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.yaml");
+                if (files.Length == 0)
+                {
+                    throw new InvalidOperationException($"No manifest found");
+                }
+
+                if (files.Length > 1)
+                {
+                    throw new InvalidOperationException($"Ambiguous match found {string.Join(", ", files.Select(Path.GetFileName))}");
+                }
+
+                manifest = files[0];
+            }
+
+            if (!File.Exists(manifest))
+            {
+                throw new InvalidOperationException($"{manifest} does not exist");
+            }
+
+            var app = Application.FromYaml(manifest);
+            return app;
         }
 
         private static void HandleException(Exception exception, InvocationContext context)
