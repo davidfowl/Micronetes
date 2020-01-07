@@ -14,7 +14,7 @@ namespace ApplicationHost
             {
                 new ServiceDescription {
                     Name = "frontend",
-                    ProjectFile = Path.Combine("FrontEnd", "FrontEnd.csproj"),
+                    ProjectFile = Path.Combine("..", "FrontEnd", "FrontEnd.csproj"),
                     Bindings = new List<ServiceBinding>
                     {
                         new ServiceBinding {
@@ -26,7 +26,7 @@ namespace ApplicationHost
                 },
                 new ServiceDescription {
                     Name = "backend",
-                    ProjectFile = Path.Combine("BackEnd", "BackEnd.csproj"),
+                    ProjectFile = Path.Combine("..", "BackEnd", "BackEnd.csproj"),
                     Bindings = new List<ServiceBinding>
                     {
                         new ServiceBinding {
@@ -52,7 +52,7 @@ namespace ApplicationHost
                 },
                 new ServiceDescription {
                     Name = "worker",
-                    ProjectFile = Path.Combine("Worker", "Worker.csproj"),
+                    ProjectFile = Path.Combine("..", "Worker", "Worker.csproj"),
                     Configuration = new Dictionary<string, string>
                     {
                         { "key", "value" }

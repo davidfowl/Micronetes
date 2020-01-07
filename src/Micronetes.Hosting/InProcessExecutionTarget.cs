@@ -46,8 +46,9 @@ namespace Micronetes.Hosting
             }
 
             var serviceName = serviceDescription.Name;
-            var path = GetDllPath(serviceDescription);
-            var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile));
+            var fullProjectPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), serviceDescription.ProjectFile));
+            var path = GetDllPath(fullProjectPath);
+            var contentRoot = Path.GetDirectoryName(fullProjectPath);
 
             var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
             var status = service.Replicas[replica] = new ServiceReplica();
@@ -156,11 +157,11 @@ namespace Micronetes.Hosting
             await Task.WhenAll(tasks);
         }
 
-        private static string GetDllPath(ServiceDescription serviceDescription)
+        private static string GetDllPath(string projectFilePath)
         {
             // TODO: Use msbuild to get the target path
-            var outputFileName = Path.GetFileNameWithoutExtension(serviceDescription.ProjectFile) + ".dll";
-            return Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile), "bin", "Debug", "netcoreapp3.1", outputFileName);
+            var outputFileName = Path.GetFileNameWithoutExtension(projectFilePath) + ".dll";
+            return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
         private class NoopLifetime : IHostLifetime

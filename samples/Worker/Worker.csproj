@@ -10,6 +10,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\Micronetes\Micronetes.csproj" />
+    <ProjectReference Include="..\..\src\Micronetes\Micronetes.csproj" />
   </ItemGroup>
 </Project>

@@ -46,11 +46,13 @@ namespace Micronetes.Hosting
             }
 
             var serviceName = serviceDescription.Name;
-            var path = GetExePath(serviceDescription);
-            var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile));
+            var fullProjectPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), serviceDescription.ProjectFile));
+            var path = GetExePath(fullProjectPath);
+            var contentRoot = Path.GetDirectoryName(fullProjectPath);
             var environment = new Dictionary<string, string>();
             var args = service.Description.Bindings.Count > 0 ? $"--urls={service.Description.DefaultBinding.Address}" : "";
 
+            service.Status["projectFilePath"] = fullProjectPath;
             service.Status["executablePath"] = path;
             service.Status["workingDir"] = contentRoot;
             service.Status["commandLineArgs"] = args;
@@ -73,42 +75,52 @@ namespace Micronetes.Hosting
                     status["pid"] = null;
                     service.Status["restarts"] = restarts;
 
-                    _logger.LogInformation("Launching service {ServiceName}", serviceName);
+                    _logger.LogInformation("Launching service {ServiceName} from {ExePath}", serviceName, path);
 
-                    var result = ProcessUtil.Run(path, args,
-                        environmentVariables: environment,
-                        workingDirectory: contentRoot,
-                        outputDataReceived: data =>
-                        {
-                            if (data == null)
+                    try
+                    {
+                        var result = ProcessUtil.Run(path, args,
+                            environmentVariables: environment,
+                            workingDirectory: contentRoot,
+                            outputDataReceived: data =>
                             {
-                                return;
-                            }
+                                if (data == null)
+                                {
+                                    return;
+                                }
 
-                            service.Logs.Add(data);
-                        },
-                        onStart: pid =>
-                        {
-                            service.State = ServiceState.Running;
-
-                            var defaultBinding = service.Description.DefaultBinding;
-
-                            if (defaultBinding == null)
+                                service.Logs.Add(data);
+                            },
+                            onStart: pid =>
                             {
-                                _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
-                            }
-                            else
-                            {
-                                _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
-                            }
+                                service.State = ServiceState.Running;
 
-                            status["pid"] = pid;
-                        },
-                        throwOnError: false,
-                        cancellationToken: state.StoppedTokenSource.Token);
+                                var defaultBinding = service.Description.DefaultBinding;
 
-                    status["exitCode"] = result.ExitCode;
-                    service.State = ServiceState.NotRunning;
+                                if (defaultBinding == null)
+                                {
+                                    _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                                }
+                                else
+                                {
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
+                                }
+
+                                status["pid"] = pid;
+                            },
+                            throwOnError: false,
+                            cancellationToken: state.StoppedTokenSource.Token);
+
+                        status["exitCode"] = result.ExitCode;
+                        service.State = ServiceState.NotRunning;
+
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(0, ex, "Failed to launch process for service {ServiceName}", serviceName);
+
+                        Thread.Sleep(5000);
+                    }
 
                     restarts++;
                     _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
@@ -151,11 +163,11 @@ namespace Micronetes.Hosting
             return Task.WhenAll(tasks);
         }
 
-        private static string GetExePath(ServiceDescription serviceDescription)
+        private static string GetExePath(string projectFilePath)
         {
             // TODO: Use msbuild to get the target path
-            var outputFileName = Path.GetFileNameWithoutExtension(serviceDescription.ProjectFile) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
-            return Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile), "bin", "Debug", "netcoreapp3.1", outputFileName);
+            var outputFileName = Path.GetFileNameWithoutExtension(projectFilePath) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
+            return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
         private class ProcessState

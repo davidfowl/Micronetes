@@ -2,17 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-    <EnableDefaultItems>false</EnableDefaultItems>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Include="Program.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="*\*.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="Never" />
-  </ItemGroup>
-
+  
   <ItemGroup>
     <ProjectReference Include="..\..\src\Micronetes.Hosting\Micronetes.Hosting.csproj" />
   </ItemGroup>

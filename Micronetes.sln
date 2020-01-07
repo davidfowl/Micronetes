@@ -14,11 +14,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackEnd", "samples\ApplicationHost\BackEnd\BackEnd.csproj", "{33B902B8-F663-46C7-8380-8AE692401F6A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackEnd", "samples\BackEnd\BackEnd.csproj", "{33B902B8-F663-46C7-8380-8AE692401F6A}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FrontEnd", "samples\ApplicationHost\FrontEnd\FrontEnd.csproj", "{E7D69869-B73A-4B38-8AEF-229AAE25E44D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FrontEnd", "samples\FrontEnd\FrontEnd.csproj", "{E7D69869-B73A-4B38-8AEF-229AAE25E44D}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Worker", "samples\ApplicationHost\Worker\Worker.csproj", "{04B7DBF3-1237-408A-8358-B252D53C06BD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Worker", "samples\Worker\Worker.csproj", "{04B7DBF3-1237-408A-8358-B252D53C06BD}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Micronetes.Hosting", "src\Micronetes.Hosting\Micronetes.Hosting.csproj", "{44378BD2-51F5-4694-B8D4-24D0CD6FAA85}"
 EndProject
@@ -26,7 +26,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ApplicationHost", "samples\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Micronetes.Abstractions", "src\Micronetes.Abstractions\Micronetes.Abstractions.csproj", "{ABDAA43B-837D-4798-A548-1D383B7C000D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Contracts", "samples\ApplicationHost\Shared.Contracts\Shared.Contracts.csproj", "{92F7847D-B11B-4357-862E-2F12AE68FE97}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Contracts", "samples\Shared.Contracts\Shared.Contracts.csproj", "{92F7847D-B11B-4357-862E-2F12AE68FE97}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
