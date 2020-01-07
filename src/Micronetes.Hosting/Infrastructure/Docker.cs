@@ -32,11 +32,14 @@ namespace Micronetes.Hosting.Infrastructure
 
             logger.LogInformation("Running docker command {Command}", command);
 
+            var replica = service.Description.Name + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
+            var status = service.Replicas[replica] = new ServiceReplica();
+
             var result = ProcessUtil.Run("docker", command);
             var containerId = result.StandardOutput.Trim();
             var shortContainerId = containerId.Substring(0, 12);
 
-            service.Status["containerId"] = shortContainerId;
+            status["containerId"] = shortContainerId;
             service.State = ServiceState.Running;
 
             logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
@@ -64,10 +67,10 @@ namespace Micronetes.Hosting.Infrastructure
                         onStart: pid =>
                         {
                             dockerInfo.LogsPid = pid;
-                            service.Status["dockerLogsPid"] = pid;
+                            status["dockerLogsPid"] = pid;
                         });
 
-                    service.Status["dockerLogsExitCode"] = result.ExitCode;
+                    status["dockerLogsExitCode"] = result.ExitCode;
                 }
                 catch (Exception ex)
                 {

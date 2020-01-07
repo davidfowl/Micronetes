@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,9 +65,12 @@ namespace Micronetes.Hosting
 
                 while (!state.StoppedTokenSource.IsCancellationRequested)
                 {
+                    var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
+                    var status = service.Replicas[replica] = new ServiceReplica();
+
                     service.State = ServiceState.Starting;
-                    service.Status["exitCode"] = null;
-                    service.Status["pid"] = null;
+                    status["exitCode"] = null;
+                    status["pid"] = null;
                     service.Status["restarts"] = restarts;
 
                     _logger.LogInformation("Launching service {ServiceName}", serviceName);
@@ -103,14 +104,12 @@ namespace Micronetes.Hosting
                                     _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
                                 }
 
-                                state.Pid = pid;
-                                service.Status["pid"] = pid;
+                                status["pid"] = pid;
                             },
                             throwOnError: false,
                             cancellationToken: state.StoppedTokenSource.Token);
 
-                        state.ExitCode = result.ExitCode;
-                        service.Status["exitCode"] = result.ExitCode;
+                        status["exitCode"] = result.ExitCode;
                         service.State = ServiceState.NotRunning;
                     }
                     catch (Exception ex)
@@ -120,8 +119,11 @@ namespace Micronetes.Hosting
                     finally
                     {
                         restarts++;
-                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, state.ExitCode);
+                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
                     }
+
+                    // Remove the replica from the set
+                    service.Replicas.Remove(replica);
                 }
             });
 
@@ -137,17 +139,8 @@ namespace Micronetes.Hosting
             {
                 if (service.Items.TryGetValue(typeof(ProcessState), out var stateObj) && stateObj is ProcessState state)
                 {
-                    try
-                    {
-                        // Cancel the token before stopping the process
-                        state.StoppedTokenSource.Cancel();
-
-                        ProcessUtil.StopProcess(Process.GetProcessById(state.Pid));
-                    }
-                    catch (Exception)
-                    {
-
-                    }
+                    // Cancel the token before stopping the process
+                    state.StoppedTokenSource.Cancel();
                 }
                 else if (service.Description.DockerImage != null)
                 {
@@ -175,13 +168,9 @@ namespace Micronetes.Hosting
 
         private class ProcessState
         {
-            public int Pid { get; set; }
-
             public Thread Thread { get; set; }
 
             public CancellationTokenSource StoppedTokenSource { get; set; } = new CancellationTokenSource();
-
-            public int? ExitCode { get; set; }
         }
     }
 }

@@ -129,28 +129,6 @@ namespace Micronetes.Hosting
             }
         }
 
-        public static T RetryOnException<T>(int retries, Func<T> operation)
-        {
-            var attempts = 0;
-            do
-            {
-                try
-                {
-                    attempts++;
-                    return operation();
-                }
-                catch (Exception)
-                {
-                    if (attempts == retries + 1)
-                    {
-                        throw;
-                    }
-
-                    // Log.WriteLine($"Attempt {attempts} failed: {e.Message}");
-                }
-            } while (true);
-        }
-
         public static void StopProcess(Process process)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -175,7 +153,7 @@ namespace Micronetes.Hosting
                     process.Kill();
                 }
 
-                process.Dispose();
+                // process.Dispose();
 
                 do
                 {
