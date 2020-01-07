@@ -70,7 +70,7 @@ namespace Worker
                     _logger.LogError(0, ex, "Failed to start listening to rabbit mq");
                 }
 
-                await Task.Delay(500);
+                await Task.Delay(5000);
             }
 
             edi.Throw();
