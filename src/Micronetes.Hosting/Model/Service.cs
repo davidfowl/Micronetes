@@ -8,6 +8,8 @@ namespace Micronetes.Hosting.Model
     {
         public ServiceDescription Description { get; set; }
 
+        public ServiceState State { get; set; }
+
         public Dictionary<string, object> Status { get; set; } = new Dictionary<string, object>();
 
         [JsonIgnore]

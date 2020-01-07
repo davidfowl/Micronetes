@@ -50,7 +50,6 @@ namespace Micronetes.Hosting
             var serviceName = serviceDescription.Name;
             var path = GetExePath(serviceDescription);
             var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile));
-            var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             var environment = new Dictionary<string, string>();
             var args = service.Description.Bindings.Count > 0 ? $"--urls={service.Description.DefaultBinding.Address}" : "";
 
@@ -64,61 +63,72 @@ namespace Micronetes.Hosting
 
             state.Thread = new Thread(() =>
             {
-                _logger.LogInformation("Launching service {ServiceName}", serviceName);
+                var restarts = 0;
 
-                try
+                while (!state.StoppedTokenSource.IsCancellationRequested)
                 {
-                    var result = ProcessUtil.Run(path, args,
-                        environmentVariables: environment,
-                        workingDirectory: contentRoot,
-                        outputDataReceived: data =>
-                        {
-                            if (data == null)
+                    service.State = ServiceState.Starting;
+                    service.Status["exitCode"] = null;
+                    service.Status["pid"] = null;
+                    service.Status["restarts"] = restarts;
+
+                    _logger.LogInformation("Launching service {ServiceName}", serviceName);
+
+                    try
+                    {
+                        var result = ProcessUtil.Run(path, args,
+                            environmentVariables: environment,
+                            workingDirectory: contentRoot,
+                            outputDataReceived: data =>
                             {
-                                return;
-                            }
+                                if (data == null)
+                                {
+                                    return;
+                                }
 
-                            service.Logs.Add(data);
-                        },
-                        onStart: pid =>
-                        {
-                            var defaultBinding = service.Description.DefaultBinding;
-
-                            if (defaultBinding == null)
+                                service.Logs.Add(data);
+                            },
+                            onStart: pid =>
                             {
-                                _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
-                            }
-                            else
-                            {
-                                _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
-                            }
+                                service.State = ServiceState.Running;
 
-                            state.Pid = pid;
-                            service.Status["pid"] = pid;
+                                var defaultBinding = service.Description.DefaultBinding;
 
-                            tcs.TrySetResult(null);
-                        },
-                        throwOnError: false);
+                                if (defaultBinding == null)
+                                {
+                                    _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                                }
+                                else
+                                {
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
+                                }
 
-                    state.ExitCode = result.ExitCode;
-                    service.Status["exitCode"] = result.ExitCode;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(0, ex, "{ServiceName} Failed to launch", serviceName);
-                }
-                finally
-                {
-                    _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, state.ExitCode);
+                                state.Pid = pid;
+                                service.Status["pid"] = pid;
+                            },
+                            throwOnError: false,
+                            cancellationToken: state.StoppedTokenSource.Token);
 
-                    tcs.TrySetResult(null);
+                        state.ExitCode = result.ExitCode;
+                        service.Status["exitCode"] = result.ExitCode;
+                        service.State = ServiceState.NotRunning;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(0, ex, "{ServiceName} Failed to launch", serviceName);
+                    }
+                    finally
+                    {
+                        restarts++;
+                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, state.ExitCode);
+                    }
                 }
             });
 
             state.Thread.Start();
             service.Items[typeof(ProcessState)] = state;
 
-            return tcs.Task;
+            return Task.CompletedTask;
         }
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)
@@ -129,6 +139,9 @@ namespace Micronetes.Hosting
                 {
                     try
                     {
+                        // Cancel the token before stopping the process
+                        state.StoppedTokenSource.Cancel();
+
                         ProcessUtil.StopProcess(Process.GetProcessById(state.Pid));
                     }
                     catch (Exception)
@@ -165,6 +178,8 @@ namespace Micronetes.Hosting
             public int Pid { get; set; }
 
             public Thread Thread { get; set; }
+
+            public CancellationTokenSource StoppedTokenSource { get; set; } = new CancellationTokenSource();
 
             public int? ExitCode { get; set; }
         }
