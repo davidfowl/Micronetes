@@ -48,8 +48,13 @@ namespace Micronetes.Hosting
             var path = GetDllPath(serviceDescription);
             var contentRoot = Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(serviceDescription.ProjectFile));
 
+            service.Status["contentRoot"] = contentRoot;
+            service.Status["assemblyPath"] = path;
+
             // TODO: Run in different load context.
             var assembly = Assembly.LoadFrom(path);
+
+            service.Status["assembly"] = assembly.FullName;
 
             // In theory, this could be done with an IHostingStartup but it doesn't work with
             // the generic host as yet.

@@ -54,6 +54,10 @@ namespace Micronetes.Hosting
             var environment = new Dictionary<string, string>();
             var args = service.Description.Bindings.Count > 0 ? $"--urls={service.Description.DefaultBinding.Address}" : "";
 
+            service.Status["executablePath"] = path;
+            service.Status["workingDir"] = contentRoot;
+            service.Status["commandLineArgs"] = args;
+
             application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
             var state = new ProcessState();
@@ -90,12 +94,14 @@ namespace Micronetes.Hosting
                             }
 
                             state.Pid = pid;
+                            service.Status["pid"] = pid;
 
                             tcs.TrySetResult(null);
                         },
                         throwOnError: false);
 
                     state.ExitCode = result.ExitCode;
+                    service.Status["exitCode"] = result.ExitCode;
                 }
                 catch (Exception ex)
                 {

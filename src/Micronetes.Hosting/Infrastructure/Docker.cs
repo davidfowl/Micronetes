@@ -28,11 +28,15 @@ namespace Micronetes.Hosting.Infrastructure
 
             var command = $"run --rm -d {environmentArguments} -p {uri.Port}:{uri.Port} --name {service.Description.Name.ToLower()} {service.Description.DockerImage}";
 
+            service.Status["dockerCommand"] = command;
+
             logger.LogInformation("Running docker command {Command}", command);
 
             var result = ProcessUtil.Run("docker", command);
             var containerId = result.StandardOutput.Trim();
             var shortContainerId = containerId.Substring(0, 12);
+
+            service.Status["containerId"] = shortContainerId;
 
             logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
 
@@ -46,18 +50,32 @@ namespace Micronetes.Hosting.Infrastructure
 
             dockerInfo.LogsThread = new Thread(() =>
             {
-                ProcessUtil.Run("docker", $"logs -f {containerId}",
-                    outputDataReceived: data =>
-                    {
-                        if (data != null)
+                try
+                {
+                    var result = ProcessUtil.Run("docker", $"logs -f {containerId}",
+                        outputDataReceived: data =>
                         {
-                            service.Logs.Add(data);
-                        }
-                    },
-                    onStart: pid =>
-                    {
-                        dockerInfo.LogsPid = pid;
-                    });
+                            if (data != null)
+                            {
+                                service.Logs.Add(data);
+                            }
+                        },
+                        onStart: pid =>
+                        {
+                            dockerInfo.LogsPid = pid;
+                            service.Status["dockerLogsPid"] = pid;
+                        });
+
+                    service.Status["dockerLogsExitCode"] = result.ExitCode;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(0, ex, "Failed to execute docker logs");
+                }
+                finally
+                {
+
+                }
             });
 
             dockerInfo.LogsThread.Start();
