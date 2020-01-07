@@ -114,8 +114,10 @@ namespace Micronetes.Hosting
             var tasks = new Task[application.Services.Count];
             var index = 0;
 
-            async Task ShutdownAsync(IHost host)
+            async Task ShutdownAsync(Service service, IHost host)
             {
+                _logger.LogInformation("Stopping host for {ServiceName}", service.Description.Name);
+
                 try
                 {
                     await host.StopAsync();
@@ -130,7 +132,7 @@ namespace Micronetes.Hosting
             {
                 if (service.Items.TryGetValue(typeof(IHost), out var hostObj) && hostObj is IHost host)
                 {
-                    tasks[index++] = ShutdownAsync(host);
+                    tasks[index++] = ShutdownAsync(service, host);
                 }
                 else if (service.Description.DockerImage != null)
                 {
