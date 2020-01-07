@@ -144,7 +144,7 @@ namespace Micronetes.Hosting
                 }
                 else if (service.Description.DockerImage != null)
                 {
-                    Docker.Stop(_logger, service);
+                    Docker.Stop(service);
                     tasks[index++] = Task.CompletedTask;
                 }
                 else

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -39,6 +40,29 @@ namespace Micronetes.Hosting
                 })
                 .ConfigureWebHostDefaults(web =>
                 {
+                    // TODO: Proxy support
+                    //web.ConfigureKestrel(options =>
+                    //{
+                    //    options.ListenLocalhost(5000);
+                    //    options.ListenLocalhost(5001, o => o.UseHttps());
+                    // 
+                    //    foreach (var service in application.Services.Values)
+                    //    {
+                    //        foreach (var binding in service.Description.Bindings)
+                    //        {
+                    //            var uri = new Uri(binding.Address);
+                    //            options.ListenLocalhost(uri.Port, o =>
+                    //            {
+                    //                o.Run(async connection =>
+                    //                {
+                    //                    // This needs to reconnect to the target port(s) until its bound
+                    //                    // it has to stop if the service is no longer running
+                    //                });
+                    //            });
+                    //        }
+                    //    }
+                    //});
+
                     web.Configure(app =>
                     {
                         app.UseRouting();

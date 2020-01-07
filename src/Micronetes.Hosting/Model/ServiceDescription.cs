@@ -9,6 +9,7 @@ namespace Micronetes.Hosting.Model
         public bool External { get; set; }
         public string DockerImage { get; set; }
         public string ProjectFile { get; set; }
+        public int Replicas { get; set; } = 1;
         public Dictionary<string, string> Annotations { get; set; } = new Dictionary<string, string>();
         public List<ServiceBinding> Bindings { get; set; } = new List<ServiceBinding>();
         public Dictionary<string, string> Configuration { get; set; } = new Dictionary<string, string>();

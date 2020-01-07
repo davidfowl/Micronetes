@@ -141,10 +141,11 @@ namespace Micronetes.Hosting
                 {
                     // Cancel the token before stopping the process
                     state.StoppedTokenSource.Cancel();
+                    state.Thread.Join();
                 }
                 else if (service.Description.DockerImage != null)
                 {
-                    Docker.Stop(_logger, service);
+                    Docker.Stop(service);
                 }
             }
 

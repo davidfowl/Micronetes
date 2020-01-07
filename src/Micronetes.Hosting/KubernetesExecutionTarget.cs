@@ -117,7 +117,7 @@ namespace Micronetes.Hosting
                                 { "app", description.Name.ToLower() }
                             }
                         },
-                        Replicas = 2,
+                        Replicas = description.Replicas,
                         Template = new k8s.Models.V1PodTemplateSpec
                         {
                             Metadata = new k8s.Models.V1ObjectMeta
