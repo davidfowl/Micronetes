@@ -6,6 +6,9 @@
   
   <ItemGroup>
     <ProjectReference Include="..\..\src\Micronetes.Hosting\Micronetes.Hosting.csproj" />
+    <ProjectReference Include="..\BackEnd\BackEnd.csproj" />
+    <ProjectReference Include="..\FrontEnd\FrontEnd.csproj" />
+    <ProjectReference Include="..\Worker\Worker.csproj" />
   </ItemGroup>
 
 </Project>
