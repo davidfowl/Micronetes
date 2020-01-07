@@ -1,15 +1,7 @@
 - name: frontend
   projectFile: FrontEnd/FrontEnd.csproj
-  bindings:
-    - name: default
-      address: http://localhost:7000
-      protocol: http
 - name: backend
   projectFile: BackEnd/BackEnd.csproj
-  bindings:
-    - name: default
-      address: http://localhost:8000
-      protocol: http
 - name: rabbit
   dockerImage: rabbitmq
   bindings:

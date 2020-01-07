@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "ApplicationHost": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5001/api/v1/services"
+    }
+  }
+}
