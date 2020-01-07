@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Micronetes.Hosting.Model
 {
@@ -9,6 +12,17 @@ namespace Micronetes.Hosting.Model
         public Application(ServiceDescription[] services)
         {
             Services = services.ToDictionary(s => s.Name, s => new Service { Description = s });
+        }
+
+        public static Application FromYaml(string path) 
+        {
+            var deserializer = new DeserializerBuilder()
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .Build();
+
+            var descriptions = deserializer.Deserialize<ServiceDescription[]>(new StringReader(File.ReadAllText(path)));
+
+            return new Application(descriptions);
         }
 
         public Dictionary<string, Service> Services { get; }

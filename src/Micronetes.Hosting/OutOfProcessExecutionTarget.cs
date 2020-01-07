@@ -123,7 +123,10 @@ namespace Micronetes.Hosting
                     }
 
                     restarts++;
-                    _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
+                    if (status["exitCode"] != null)
+                    {
+                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
+                    }
 
                     // Remove the replica from the set
                     service.Replicas.Remove(replica);

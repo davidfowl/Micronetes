@@ -43,13 +43,13 @@ namespace Micronetes.Hosting.Infrastructure
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("docker run failed with exit code {ExitCode}", result.ExitCode);
+                    logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}", service.Description.Name, result.ExitCode);
                     service.Replicas.Remove(replica);
                     return;
                 }
 
                 var containerId = result.StandardOutput.Trim();
-                var shortContainerId = containerId.Substring(0, 12);
+                var shortContainerId = containerId.Substring(0, Math.Min(12, containerId.Length));
 
                 status["containerId"] = shortContainerId;
                 service.State = ServiceState.Running;
