@@ -40,6 +40,8 @@ namespace Micronetes.Hosting
                 })
                 .ConfigureWebHostDefaults(web =>
                 {
+                    web.UseUrls("http://localhost:3745");
+                    web.UseUrls("https://localhost:3746");
                     // TODO: Proxy support
                     //web.ConfigureKestrel(options =>
                     //{

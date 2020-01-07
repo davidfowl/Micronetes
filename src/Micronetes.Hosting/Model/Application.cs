@@ -17,7 +17,7 @@ namespace Micronetes.Hosting.Model
             Services = services.ToDictionary(s => s.Name, s => new Service { Description = s });
         }
 
-        public static Application FromYaml(string path) 
+        public static Application FromYaml(string path)
         {
             var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
 
@@ -27,10 +27,50 @@ namespace Micronetes.Hosting.Model
 
             var descriptions = deserializer.Deserialize<ServiceDescription[]>(new StringReader(File.ReadAllText(path)));
 
+            var contextDirectory = Path.GetDirectoryName(fullPath);
+
+            foreach (var d in descriptions)
+            {
+                if (d.ProjectFile == null)
+                {
+                    continue;
+                }
+
+                // Try to populate more from launch settings
+                var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(contextDirectory, d.ProjectFile)));
+                var launchSettingsPath = Path.Combine(projectDirectory, "Properties", "launchSettings.json");
+
+                if (File.Exists(launchSettingsPath))
+                {
+                    // If there's a launchSettings.json, then use it to get addresses
+                    var root = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(launchSettingsPath));
+                    var key = Path.GetFileNameWithoutExtension(d.ProjectFile);
+                    var profiles = root.GetProperty("profiles");
+                    if (profiles.TryGetProperty(key, out var projectSettings))
+                    {
+                        // Only do this if there are no bindings
+                        if (d.Bindings.Count == 0)
+                        {
+                            var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
+
+                            foreach (var address in addresses)
+                            {
+                                d.Bindings.Add(new ServiceBinding
+                                {
+                                    Name = "default",
+                                    Address = address,
+                                    Protocol = "http"
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
             return new Application(descriptions)
             {
                 // Use the file location as the context when loading from a file
-                ContextDirectory = Path.GetDirectoryName(fullPath)
+                ContextDirectory = contextDirectory
             };
         }
 
