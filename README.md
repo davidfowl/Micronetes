@@ -7,7 +7,7 @@
    - RPC
    - HTTP
 - Abstract the idea of a service address.
-- Explore what it means to run a multi-project application locally.
+- Explore what it means to run a the microservice application locally (multiple projects with service discovery)
 - Explore what it means to deploy this application to kubernetes without changes to the code and have it just work.
 
 The core interface for client -> service communication the `IClientFactory<TClient>`:
@@ -23,8 +23,8 @@ public interface IClientFactory<TClient>
 
 - HTTP - `HttpClient`
 - PubSub - `PubSubClient`
-- Queue - `Channel<T>/QueueClient`
-- RPC - `IRpcInvoker`
+- Queue - ???
+- RPC - ???
 
 The intent is to make decouple service addresses from the implementation. There are 2 flavours of TClient:
 
@@ -33,51 +33,71 @@ The intent is to make decouple service addresses from the implementation. There 
 
 ## Service Descriptions
 
-A service description is composed a service name and a list of bindings. Each binding has a name an address and a protocol.
+A service description is yaml file with list of services. Services can have multiple bindings that describe how the application can connect to it.
 
-```
-ServiceName
- - (Name, Address, Protocol)
+```yaml
+- name: redis
+  dockerImage: redis:5
+  bindings:
+    - name: default
+      port: 6379
+      protocol: redis
 ```
 
 Examples:
 
-```
-Dapr
- - (default, 127.0.0.1:80, dapr)
-
-MyWeb
- - (default, http://127.0.0.1:80, http)
- - (management, http://127.0.0.1:3000, http)
-
-Pubbie
-  - (default, 127.0.0.1:5005, pubbie)
-
-Redis 
-  - (default, 127.0.0.1:6379, redis)
-
-MyQueue
- - (default, localhost:5672, rabbitmq)
-
-Database 
- - (default, mongodb://localhost, mongodb)
- - (sql, Data Source=.;Initial Catalog=DB name;Integrated Security=True;MultipleActiveResultSets=True, sqlserver)
-
+```yaml
+- name: dapr
+  dockerImage: redis:5
+  bindings:
+    - name: default
+      port: 80
+      protocol: dapr
 ```
 
-These service names get injected into the application as environment variables by the ochrestrator (k8s or local). This allows the client code to access the address information at runtime.
+```yaml
+- name: myweb
+  projectFile: MyWeb/Web.csproj
+  bindings:
+    - name: default
+      port: 80
+      protocol: http
+    - name: management
+      port: 3000
+      protocol: http
+```
 
-The following binding gets translated as follows:
+```yaml
+- name: db
+  dockerImage: redis:5
+  bindings:
+    - name: default
+      connectionString: Data Source=.;Initial Catalog=DB name;Integrated Security=True;MultipleActiveResultSets=True
+```
+
+These service names are injected into the application as environment variables by the orchestrator. This allows the client code to access the address information at runtime.
+
+The following binding:
+
+```yaml
+- name: myweb
+  projectFile: MyWeb/Web.csproj
+  bindings:
+    - name: default
+      port: 80
+      protocol: http
+    - name: management
+      port: 3000
+      protocol: http
+```
+
+Will be translated into the following `IConfiguration` keys:
 
 ```
-MyWeb
- - (default, http://127.0.0.1:80, http)
- - (management, http://127.0.0.1:3000, http)
-
-MYWEB_SERVICE=http://127.0.0.1:80
-MYWEB_SERVICE_PROTOCOL=http
-MYWEB_SERVICE_MANAGEMENT=http://127.0.0.1:3000
-MYWEB_SERVICE_MANAGEMENT_PROTOCOL=http
+myget:service:port=80
+myget:service:protocol=http
+myget:service:management:port=3000
+myget:service:management:protocol=http
 ```
 
 The "default" binding can be accesed by the name of the service. To access other addresses, the full name must be accessed:
@@ -97,18 +117,3 @@ var managementClient = clientFactory.CreateClient("MyWeb/management");
 ```
 
 Most services will have a single binding so accessing them by service name directly should work.
-
-## Protocols
-
-The `IClientFactory<T>` implementation must understand protocol names directly. For example, the the `PubSubClientFactory` has to understand the redis protocol in order to speak to an endpoint.
-
-## Open Questions
-
-- These service definitions don't discuss the actual contracts being exposed:
-   - .proto files
-   - swagger files
-
-The caller is expected to understand that contract.
-- Who stores the mapping from protocol to `IClientFactory<T>` implementation?
-- How does this addressing scheme work for accessing clients with an identity? SignalR connection, virtual actor etc.
-   - Do we make the service a router that does further dispatch?
