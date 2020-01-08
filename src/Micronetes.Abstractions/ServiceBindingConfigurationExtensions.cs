@@ -1,11 +1,10 @@
 ﻿using System;
-using Micronetes;
 
 namespace Microsoft.Extensions.Configuration
 {
     public static class ServiceBindingConfigurationExtensions
     {
-        public static ServiceBinding GetBinding(this IConfiguration configuration, string name)
+        public static string GetAddress(this IConfiguration configuration, string name)
         {
             var serviceAddress = configuration[$"{name.ToUpper()}_SERVICE"];
 
@@ -14,9 +13,19 @@ namespace Microsoft.Extensions.Configuration
                 throw new InvalidOperationException($"No service {name} found. Unable to find a configuration key with the name \"{name.ToUpper()}_SERVICE\"");
             }
 
+            return serviceAddress;
+        }
+
+        public static string GetProtocol(this IConfiguration configuration, string name)
+        {
             var protocol = configuration[$"{name.ToUpper()}_SERVICE_PROTOCOL"];
 
-            return new ServiceBinding(serviceAddress, protocol);
+            if (string.IsNullOrEmpty(protocol))
+            {
+                throw new InvalidOperationException($"No service {name} found. Unable to find a configuration key with the name \"{name.ToUpper()}_SERVICE\"");
+            }
+
+            return protocol;
         }
     }
 }

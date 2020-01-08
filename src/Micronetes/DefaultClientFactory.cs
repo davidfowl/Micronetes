@@ -24,22 +24,23 @@ namespace Micronetes
 
         public TClient CreateClient(string name)
         {
-            var binding = _configuration.GetBinding(name);
+            var address = _configuration.GetAddress(name);
+            var protocol = _configuration.GetProtocol(name);
 
             // TODO: Figure out what we should do here for defaults (or is it too much magic?)
 
-            switch (binding.Protocol?.ToLower())
+            switch (protocol?.ToLower())
             {
                 case "grpc":
                 case null:
-                    return _clients.GetOrAdd(name, k => GrpcChannel.ForAddress(binding.Address).CreateGrpcService<TClient>());
+                    return _clients.GetOrAdd(name, k => GrpcChannel.ForAddress(address).CreateGrpcService<TClient>());
                 default:
                     // Default to GRPC if the TClient is a service contract
                     break;
             }
 
 
-            throw new NotSupportedException($"{name} exposes protocol {binding.Protocol} which has no support for {typeof(TClient)}");
+            throw new NotSupportedException($"{name} exposes protocol {address} which has no support for {typeof(TClient)}");
         }
     }
 }

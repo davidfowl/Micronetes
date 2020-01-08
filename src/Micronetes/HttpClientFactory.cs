@@ -17,13 +17,13 @@ namespace Micronetes
 
         public HttpClient CreateClient(string name)
         {
-            var binding = _nameResolver.GetBinding(name);
+            var address = _nameResolver.GetAddress(name);
 
             // TODO: Check the protocol here
 
             return _clients.GetOrAdd(name, k => new HttpClient()
             {
-                BaseAddress = new Uri(binding.Address)
+                BaseAddress = new Uri(address)
             });
         }
     }

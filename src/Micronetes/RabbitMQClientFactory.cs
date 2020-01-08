@@ -17,15 +17,16 @@ namespace Micronetes
 
         public IModel CreateClient(string name)
         {
-            var binding = _configuration.GetBinding(name);
+            var address = _configuration.GetAddress(name);
+            var protocol = _configuration.GetProtocol(name);
 
-            if (!string.Equals("rabbitmq", binding.Protocol, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals("rabbitmq", protocol, StringComparison.OrdinalIgnoreCase))
             {
-                throw new NotSupportedException($"Unsupported protocol {binding.Protocol}");
+                throw new NotSupportedException($"Unsupported protocol {protocol}");
             }
 
             // This should be host:port
-            var uri = new Uri(binding.Address);
+            var uri = new Uri(address);
 
             return _clients.GetOrAdd(name, n =>
             {
