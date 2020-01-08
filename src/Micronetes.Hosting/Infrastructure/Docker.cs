@@ -73,7 +73,9 @@ namespace Micronetes.Hosting.Infrastructure
 
                 logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
 
-                ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false);
+                result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false);
+
+                logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", service.Description.Name.ToLower(), shortContainerId, result.ExitCode);
             });
 
             dockerInfo.Thread.Start();
