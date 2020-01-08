@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,9 +60,10 @@ namespace Micronetes.Hosting
                 Threads = new Thread[service.Description.Replicas.Value]
             };
 
-            void RunApplication(int? port)
+            void RunApplication(IEnumerable<int> ports)
             {
-                var args = port != null ? $"--urls=http://localhost:{port}" : "";
+                var hasPorts = ports.Any();
+                var args = hasPorts ? string.Join(" ", ports.Select(p => $"--urls=http://localhost:{p}")) : "";
                 var restarts = 0;
 
                 var environment = new Dictionary<string, string>();
@@ -79,9 +81,9 @@ namespace Micronetes.Hosting
                     status["pid"] = null;
                     status["commandLineArgs"] = args;
 
-                    if(port != null)
+                    if (hasPorts)
                     {
-                        status["port"] = port;
+                        status["ports"] = ports;
                     }
 
                     service.Status["restarts"] = restarts;
@@ -106,13 +108,13 @@ namespace Micronetes.Hosting
                             {
                                 service.State = ServiceState.Running;
 
-                                if (port == null)
+                                if (hasPorts)
                                 {
                                     _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
                                 }
                                 else
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, $"http://localhost:{port}");
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => p.ToString())));
                                 }
 
                                 status["pid"] = pid;
@@ -142,22 +144,31 @@ namespace Micronetes.Hosting
                 }
             }
 
-            var defaultBinding = service.Description.DefaultBinding;
-
-            if (defaultBinding != null)
+            if (serviceDescription.Bindings.Count > 0)
             {
-                var ports = service.PortMap[defaultBinding.Port.Value];
-                for (int i = 0; i < service.Description.Replicas; i++)
+                // Each replica is assigned a list of internal ports, one mapped to each external
+                // port
+                for (int i = 0; i < serviceDescription.Replicas; i++)
                 {
-                    var port = ports[i];
-                    state.Threads[i] = new Thread(() => RunApplication(port));
+                    var ports = new List<int>();
+                    foreach (var binding in serviceDescription.Bindings)
+                    {
+                        if (binding.Port == null)
+                        {
+                            continue;
+                        }
+
+                        ports.Add(service.PortMap[binding.Port.Value][i]);
+                    }
+
+                    state.Threads[i] = new Thread(() => RunApplication(ports));
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    state.Threads[i] = new Thread(() => RunApplication(null));
+                    state.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<int>()));
                 }
             }
 
