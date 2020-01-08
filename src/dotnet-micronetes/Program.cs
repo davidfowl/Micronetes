@@ -90,31 +90,40 @@ namespace Micronetes.Host
             return command;
         }
 
-        private static Application ResolveApplication(string manifest)
+        private static Application ResolveApplication(string manifestPath)
         {
-            if (string.IsNullOrEmpty(manifest))
+            if (string.IsNullOrEmpty(manifestPath))
             {
-                var files = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.yaml");
-                if (files.Length == 0)
-                {
-                    throw new InvalidOperationException($"No manifest found");
-                }
-
-                if (files.Length > 1)
-                {
-                    throw new InvalidOperationException($"Ambiguous match found {string.Join(", ", files.Select(Path.GetFileName))}");
-                }
-
-                manifest = files[0];
+                manifestPath = ResolveManifestFromDirectory(Directory.GetCurrentDirectory());
+            }
+            else if (Directory.Exists(manifestPath))
+            {
+                manifestPath = ResolveManifestFromDirectory(Path.GetFullPath(manifestPath));
             }
 
-            if (!File.Exists(manifest))
+            if (!File.Exists(manifestPath))
             {
-                throw new InvalidOperationException($"{manifest} does not exist");
+                throw new InvalidOperationException($"{manifestPath} does not exist");
             }
 
-            var app = Application.FromYaml(manifest);
+            var app = Application.FromYaml(manifestPath);
             return app;
+        }
+
+        private static string ResolveManifestFromDirectory(string basePath)
+        {
+            var files = Directory.GetFiles(basePath, "*.yaml");
+            if (files.Length == 0)
+            {
+                throw new InvalidOperationException($"No manifest found");
+            }
+
+            if (files.Length > 1)
+            {
+                throw new InvalidOperationException($"Ambiguous match found {string.Join(", ", files.Select(Path.GetFileName))}");
+            }
+
+            return files[0];
         }
 
         private static void HandleException(Exception exception, InvocationContext context)
