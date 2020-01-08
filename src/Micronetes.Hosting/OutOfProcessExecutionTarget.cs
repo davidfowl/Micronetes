@@ -49,13 +49,10 @@ namespace Micronetes.Hosting
             var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.ProjectFile));
             var path = GetExePath(fullProjectPath);
             var contentRoot = Path.GetDirectoryName(fullProjectPath);
-            var environment = new Dictionary<string, string>();
 
             service.Status["projectFilePath"] = fullProjectPath;
             service.Status["executablePath"] = path;
             service.Status["workingDir"] = contentRoot;
-
-            application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
             var state = new ProcessState
             {
@@ -67,10 +64,15 @@ namespace Micronetes.Hosting
                 var args = port != null ? $"--urls=http://localhost:{port}" : "";
                 var restarts = 0;
 
+                var environment = new Dictionary<string, string>();
+                application.PopulateEnvironment(service, (k, v) => environment[k] = v);
+
                 while (!state.StoppedTokenSource.IsCancellationRequested)
                 {
                     var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
                     var status = service.Replicas[replica] = new ServiceReplica();
+                    // This isn't your host name
+                    environment["APP_INSTANCE"] = replica;
 
                     service.State = ServiceState.Starting;
                     status["exitCode"] = null;
@@ -98,7 +100,7 @@ namespace Micronetes.Hosting
                                     return;
                                 }
 
-                                service.Logs.Add(data);
+                                service.Logs.Add("[" + replica + "]: " + data);
                             },
                             onStart: pid =>
                             {

@@ -106,7 +106,8 @@ namespace Micronetes.Hosting
                                         try
                                         {
                                             var target = new TcpClient();
-                                            await target.ConnectAsync(IPAddress.Loopback, ports[next]);
+                                            var port = ports[next];
+                                            await target.ConnectAsync(IPAddress.Loopback, port);
 
                                             var targetStream = target.GetStream();
 
