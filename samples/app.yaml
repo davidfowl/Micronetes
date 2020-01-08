@@ -6,6 +6,7 @@
       protocol: http
 - name: backend
   projectFile: BackEnd/BackEnd.csproj
+  replicas: 2
   bindings:
     - name: default
       port: 8000

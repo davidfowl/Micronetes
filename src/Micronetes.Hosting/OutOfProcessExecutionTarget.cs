@@ -50,19 +50,21 @@ namespace Micronetes.Hosting
             var path = GetExePath(fullProjectPath);
             var contentRoot = Path.GetDirectoryName(fullProjectPath);
             var environment = new Dictionary<string, string>();
-            var args = service.Description.Bindings.Count > 0 ? $"--urls=http://localhost:{service.Description.DefaultBinding.Port}" : "";
 
             service.Status["projectFilePath"] = fullProjectPath;
             service.Status["executablePath"] = path;
             service.Status["workingDir"] = contentRoot;
-            service.Status["commandLineArgs"] = args;
 
             application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
-            var state = new ProcessState();
-
-            state.Thread = new Thread(() =>
+            var state = new ProcessState
             {
+                Threads = new Thread[service.Description.Replicas.Value]
+            };
+
+            void RunApplication(int? port)
+            {
+                var args = port != null ? $"--urls=http://localhost:{port}" : "";
                 var restarts = 0;
 
                 while (!state.StoppedTokenSource.IsCancellationRequested)
@@ -73,9 +75,16 @@ namespace Micronetes.Hosting
                     service.State = ServiceState.Starting;
                     status["exitCode"] = null;
                     status["pid"] = null;
+                    status["commandLineArgs"] = args;
+
+                    if(port != null)
+                    {
+                        status["port"] = port;
+                    }
+
                     service.Status["restarts"] = restarts;
 
-                    _logger.LogInformation("Launching service {ServiceName} from {ExePath}", serviceName, path);
+                    _logger.LogInformation("Launching service {ServiceName} from {ExePath}", replica, path);
 
                     try
                     {
@@ -95,15 +104,13 @@ namespace Micronetes.Hosting
                             {
                                 service.State = ServiceState.Running;
 
-                                var defaultBinding = service.Description.DefaultBinding;
-
-                                if (defaultBinding == null)
+                                if (port == null)
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID}", serviceName, pid);
+                                    _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
                                 }
                                 else
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, $"http://localhost:{defaultBinding.Port}");
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, $"http://localhost:{port}");
                                 }
 
                                 status["pid"] = pid;
@@ -117,7 +124,7 @@ namespace Micronetes.Hosting
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(0, ex, "Failed to launch process for service {ServiceName}", serviceName);
+                        _logger.LogError(0, ex, "Failed to launch process for service {ServiceName}", replica);
 
                         Thread.Sleep(5000);
                     }
@@ -125,15 +132,38 @@ namespace Micronetes.Hosting
                     restarts++;
                     if (status["exitCode"] != null)
                     {
-                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", serviceName, status["exitCode"]);
+                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", replica, status["exitCode"]);
                     }
 
                     // Remove the replica from the set
-                    service.Replicas.Remove(replica);
+                    service.Replicas.TryRemove(replica, out _);
                 }
-            });
+            }
 
-            state.Thread.Start();
+            var defaultBinding = service.Description.DefaultBinding;
+
+            if (defaultBinding != null)
+            {
+                var ports = service.PortMap[defaultBinding.Port.Value];
+                for (int i = 0; i < service.Description.Replicas; i++)
+                {
+                    var port = ports[i];
+                    state.Threads[i] = new Thread(() => RunApplication(port));
+                }
+            }
+            else
+            {
+                for (int i = 0; i < service.Description.Replicas; i++)
+                {
+                    state.Threads[i] = new Thread(() => RunApplication(null));
+                }
+            }
+
+            for (int i = 0; i < service.Description.Replicas; i++)
+            {
+                state.Threads[i].Start();
+            }
+
             service.Items[typeof(ProcessState)] = state;
 
             return Task.CompletedTask;
@@ -147,7 +177,10 @@ namespace Micronetes.Hosting
                 {
                     // Cancel the token before stopping the process
                     state.StoppedTokenSource.Cancel();
-                    state.Thread.Join();
+                    foreach (var t in state.Threads)
+                    {
+                        t.Join();
+                    }
                 }
                 else if (service.Description.DockerImage != null)
                 {
@@ -175,7 +208,7 @@ namespace Micronetes.Hosting
 
         private class ProcessState
         {
-            public Thread Thread { get; set; }
+            public Thread[] Threads { get; set; }
 
             public CancellationTokenSource StoppedTokenSource { get; set; } = new CancellationTokenSource();
         }

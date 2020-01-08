@@ -1,14 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Pipelines;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Connections;
+using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Connections;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +33,8 @@ namespace Micronetes.Hosting
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
 
+            options.Converters.Add(ServiceReplica.JsonConverter);
+
             using var host = Host.CreateDefaultBuilder(args)
                 .UseSerilog((context, configuration) =>
                 {
@@ -40,33 +47,98 @@ namespace Micronetes.Hosting
                 })
                 .ConfigureWebHostDefaults(web =>
                 {
-                    web.UseUrls("http://localhost:3745", "https://localhost:3746");
+                    web.ConfigureKestrel(options =>
+                    {
+                        options.ListenLocalhost(3745);
 
-                    // TODO: Proxy support
-                    //web.ConfigureKestrel(options =>
-                    //{
-                    //    options.ListenLocalhost(5000);
-                    //    options.ListenLocalhost(5001, o => o.UseHttps());
-                    // 
-                    //    foreach (var service in application.Services.Values)
-                    //    {
-                    //        foreach (var binding in service.Description.Bindings)
-                    //        {
-                    //            var uri = new Uri(binding.Address);
-                    //            options.ListenLocalhost(uri.Port, o =>
-                    //            {
-                    //                o.Run(async connection =>
-                    //                {
-                    //                    // This needs to reconnect to the target port(s) until its bound
-                    //                    // it has to stop if the service is no longer running
-                    //                });
-                    //            });
-                    //        }
-                    //    }
-                    //});
+                        var logger = options.ApplicationServices.GetRequiredService<ILogger<MicronetesHost>>();
+
+                        foreach (var service in application.Services.Values)
+                        {
+                            if (service.Description.ProjectFile == null)
+                            {
+                                // We eventually want to proxy everything, this is temporary
+                                continue;
+                            }
+
+                            static int GetNextPort()
+                            {
+                                // Let the OS assign the next available port. Unless we cycle through all ports
+                                // on a test run, the OS will always increment the port number when making these calls.
+                                // This prevents races in parallel test runs where a test is already bound to
+                                // a given port, and a new test is able to bind to the same port due to port
+                                // reuse being enabled by default by the OS.
+                                using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                                socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                                return ((IPEndPoint)socket.LocalEndPoint).Port;
+                            }
+
+                            foreach (var binding in service.Description.Bindings)
+                            {
+                                if (binding.Port == null)
+                                {
+                                    continue;
+                                }
+
+                                var ports = new List<int>();
+
+                                for (int i = 0; i < service.Description.Replicas; i++)
+                                {
+                                    // Reserve a port for each replica
+                                    var port = GetNextPort();
+                                    ports.Add(port);
+                                }
+
+                                logger.LogInformation("Mapping external port {ExternalPort} to internal port(s) {InternalPorts} for {ServiceName}", binding.Port, string.Join(", ", ports.Select(p => p.ToString())), service.Description.Name);
+
+                                service.PortMap[binding.Port.Value] = ports;
+
+                                options.ListenLocalhost(binding.Port.Value, o =>
+                                {
+                                    long count = 0;
+
+                                    o.Run(async connection =>
+                                    {
+                                        var notificationFeature = connection.Features.Get<IConnectionLifetimeNotificationFeature>();
+
+                                        var next = (int)(Interlocked.Increment(ref count) % ports.Count);
+
+                                        try
+                                        {
+                                            var target = new TcpClient();
+                                            await target.ConnectAsync(IPAddress.Loopback, ports[next]);
+
+                                            var targetStream = target.GetStream();
+
+                                            // external -> internal
+                                            var reading = Task.Run(() => connection.Transport.Input.CopyToAsync(targetStream, notificationFeature.ConnectionClosedRequested));
+                                            // internal -> external
+                                            var writing = Task.Run(() => targetStream.CopyToAsync(connection.Transport.Output, notificationFeature.ConnectionClosedRequested));
+
+                                            await reading;
+                                            await writing;
+                                        }
+                                        catch (OperationCanceledException)
+                                        {
+
+                                        }
+                                        finally
+                                        {
+
+                                        }
+
+                                        // This needs to reconnect to the target port(s) until its bound
+                                        // it has to stop if the service is no longer running
+                                    });
+                                });
+                            }
+                        }
+                    });
 
                     web.Configure(app =>
                     {
+                        app.UseDeveloperExceptionPage();
+
                         app.UseRouting();
 
                         app.UseEndpoints(endpoints =>
@@ -143,7 +215,7 @@ namespace Micronetes.Hosting
 
             await host.StartAsync();
 
-            logger.LogInformation("API server running on {Addresses}", string.Join(", ", serverAddressesFeature.Addresses));
+            logger.LogInformation("API server running on http://localhost:3745");
 
             try
             {
@@ -171,10 +243,6 @@ namespace Micronetes.Hosting
             if (args.Contains("--k8s") || args.Contains("--kubernetes"))
             {
                 return new KubernetesExecutionTarget(logger);
-            }
-            else if (args.Contains("--inprocess"))
-            {
-                return new InProcessExecutionTarget(logger);
             }
 
             return new OutOfProcessExecutionTarget(logger);

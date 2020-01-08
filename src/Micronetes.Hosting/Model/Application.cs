@@ -14,7 +14,16 @@ namespace Micronetes.Hosting.Model
 
         public Application(ServiceDescription[] services)
         {
-            Services = services.ToDictionary(s => s.Name, s => new Service { Description = s });
+            var map = new Dictionary<string, Service>();
+            
+            // TODO: Do validation here
+            foreach (var s in services)
+            {
+                s.Replicas ??= 1;
+                map[s.Name] = new Service { Description = s };
+            }
+
+            Services = map;
         }
 
         public static Application FromYaml(string path)

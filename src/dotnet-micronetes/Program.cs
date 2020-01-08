@@ -67,6 +67,7 @@ namespace Micronetes.Host
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    console.Out.WriteLine(await response.Content.ReadAsStringAsync());
                     return;
                 }
 
@@ -106,11 +107,6 @@ namespace Micronetes.Host
             {
                 Arity = ArgumentArity.ZeroOrOne
             };
-
-            command.AddOption(new Option("--inprocess")
-            {
-                Required = false
-            });
 
             command.AddOption(new Option("--k8s")
             {

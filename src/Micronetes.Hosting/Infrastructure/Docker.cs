@@ -45,7 +45,7 @@ namespace Micronetes.Hosting.Infrastructure
                 if (result.ExitCode != 0)
                 {
                     logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}", service.Description.Name, result.ExitCode);
-                    service.Replicas.Remove(replica);
+                    service.Replicas.TryRemove(replica, out _);
                     return;
                 }
 
