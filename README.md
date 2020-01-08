@@ -48,7 +48,7 @@ Examples:
 
 ```yaml
 - name: dapr
-  dockerImage: redis:5
+  executable: daprd
   bindings:
     - name: default
       port: 80
