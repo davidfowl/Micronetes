@@ -94,10 +94,10 @@ The following binding:
 Will be translated into the following `IConfiguration` keys:
 
 ```
-myget:service:port=80
-myget:service:protocol=http
-myget:service:management:port=3000
-myget:service:management:protocol=http
+myweb:service:port=80
+myweb:service:protocol=http
+myweb:service:management:port=3000
+myweb:service:management:protocol=http
 ```
 
 The "default" binding can be accesed by the name of the service. To access other addresses, the full name must be accessed:
