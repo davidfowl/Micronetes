@@ -20,7 +20,6 @@ namespace Micronetes
         {
             // REVIEW: Settings options configuration from where?
 
-            var address = _configuration.GetAddress(name);
             var protocol = _configuration.GetProtocol(name);
 
             if (!string.Equals("redis", protocol, StringComparison.OrdinalIgnoreCase))
@@ -30,9 +29,11 @@ namespace Micronetes
 
             return _clients.GetOrAdd(name, n =>
             {
-                var uri = new Uri(address);
+                var config = new ConfigurationOptions();
+                config.EndPoints.Add(_configuration.GetHost(name), _configuration.GetPort(name));
+
                 // REVIEW: What about async? Do we make sure that clients all have a an explicit Connect
-                return ConnectionMultiplexer.Connect(uri.Host + ":" + uri.Port);
+                return ConnectionMultiplexer.Connect(config);
             });
         }
 

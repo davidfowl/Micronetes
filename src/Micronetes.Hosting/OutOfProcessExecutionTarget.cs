@@ -50,7 +50,7 @@ namespace Micronetes.Hosting
             var path = GetExePath(fullProjectPath);
             var contentRoot = Path.GetDirectoryName(fullProjectPath);
             var environment = new Dictionary<string, string>();
-            var args = service.Description.Bindings.Count > 0 ? $"--urls={service.Description.DefaultBinding.Address}" : "";
+            var args = service.Description.Bindings.Count > 0 ? $"--urls=http://localhost:{service.Description.DefaultBinding.Port}" : "";
 
             service.Status["projectFilePath"] = fullProjectPath;
             service.Status["executablePath"] = path;
@@ -103,7 +103,7 @@ namespace Micronetes.Hosting
                                 }
                                 else
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, defaultBinding.Address);
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", serviceName, pid, $"http://localhost:{defaultBinding.Port}");
                                 }
 
                                 status["pid"] = pid;

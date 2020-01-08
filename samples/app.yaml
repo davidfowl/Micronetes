@@ -2,19 +2,19 @@
   projectFile: FrontEnd/FrontEnd.csproj
   bindings:
     - name: default
-      address: http://localhost:7000
+      port: 7000
       protocol: http
 - name: backend
   projectFile: BackEnd/BackEnd.csproj
   bindings:
     - name: default
-      address: http://localhost:8000
+      port: 8000
       protocol: grpc
 - name: rabbit
   dockerImage: rabbitmq
   bindings:
     - name: default
-      address: tcp://localhost:5672
+      port: 5672
       protocol: rabbitmq
 - name: worker
   projectFile: Worker/Worker.csproj
@@ -22,5 +22,5 @@
   dockerImage: redis
   bindings:
     - name: default
-      address: tcp://localhost:6379
+      port: 6379
       protocol: redis

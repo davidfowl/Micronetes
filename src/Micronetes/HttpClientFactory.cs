@@ -17,7 +17,7 @@ namespace Micronetes
 
         public HttpClient CreateClient(string name)
         {
-            var address = _nameResolver.GetAddress(name);
+            var address = _nameResolver.GetUrl(name);
 
             // TODO: Check the protocol here
 

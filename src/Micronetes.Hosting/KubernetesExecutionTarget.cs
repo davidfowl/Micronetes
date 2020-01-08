@@ -215,9 +215,9 @@ namespace Micronetes.Hosting
 
             foreach (var b in bindings)
             {
-                if (Uri.TryCreate(b.Address, UriKind.Absolute, out var uri))
+                if (b.Port != null)
                 {
-                    ports.Add(new k8s.Models.V1ServicePort(uri.Port));
+                    ports.Add(new k8s.Models.V1ServicePort(b.Port.Value));
                 }
             }
 
@@ -233,7 +233,7 @@ namespace Micronetes.Hosting
                 var defaultBinding = service.Description.DefaultBinding;
                 if (defaultBinding != null)
                 {
-                    env.Add(new V1EnvVar("ASPNETCORE_URLS", defaultBinding.Address));
+                    env.Add(new V1EnvVar("ASPNETCORE_URLS", "https://localhost:" + defaultBinding.Port));
                 }
             }
 

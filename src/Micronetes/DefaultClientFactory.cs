@@ -24,7 +24,7 @@ namespace Micronetes
 
         public TClient CreateClient(string name)
         {
-            var address = _configuration.GetAddress(name);
+            var address = _configuration.GetUrl(name);
             var protocol = _configuration.GetProtocol(name);
 
             // TODO: Figure out what we should do here for defaults (or is it too much magic?)

@@ -88,14 +88,19 @@ namespace Micronetes.Hosting
             hostBuilder.ConfigureAppConfiguration(b =>
             {
                 // Populate dependency information
-                var configuration = new Dictionary<string, string>();
-                application.PopulateEnvironment(service, (k, v) => configuration[k] = v);
+                var configuration = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                application.PopulateEnvironment(service, (k, v) =>
+                {
+                    // Do the env variable to config key substitution
+                    var key = k.Replace("__", "_").Replace("_", ":");
+                    configuration[key] = v;
+                });
 
                 var defaultBinding = service.Description.DefaultBinding;
 
                 if (defaultBinding != null)
                 {
-                    configuration[WebHostDefaults.ServerUrlsKey] = defaultBinding.Address;
+                    configuration[WebHostDefaults.ServerUrlsKey] = $"http://localhost:{defaultBinding.Port}";
                 }
 
                 b.AddInMemoryCollection(configuration);
@@ -110,7 +115,7 @@ namespace Micronetes.Hosting
 
             service.Items[typeof(IHost)] = host;
 
-            await host.StartAsync();
+            await Task.Run(() => host.StartAsync());
 
             service.State = ServiceState.Running;
         }

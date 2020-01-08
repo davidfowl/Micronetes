@@ -49,20 +49,20 @@ namespace Micronetes.Hosting.Model
                     if (profiles.TryGetProperty(key, out var projectSettings))
                     {
                         // Only do this if there are no bindings
-                        if (d.Bindings.Count == 0)
-                        {
-                            var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
+                        //if (d.Bindings.Count == 0)
+                        //{
+                        //    var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
 
-                            foreach (var address in addresses)
-                            {
-                                d.Bindings.Add(new ServiceBinding
-                                {
-                                    Name = "default",
-                                    Address = address,
-                                    Protocol = "http"
-                                });
-                            }
-                        }
+                        //    foreach (var address in addresses)
+                        //    {
+                        //        d.Bindings.Add(new ServiceBinding
+                        //        {
+                        //            Name = "default",
+                        //            ConnectionString = address,
+                        //            Protocol = "http"
+                        //        });
+                        //    }
+                        //}
                     }
                 }
             }
@@ -120,14 +120,30 @@ namespace Micronetes.Hosting.Model
                     string bindingName;
                     if (b.IsDefault)
                     {
-                        bindingName = $"{s.Description.Name.ToUpper()}_SERVICE";
+                        bindingName = $"{s.Description.Name.ToUpper()}";
                     }
                     else
                     {
-                        bindingName = $"{s.Description.Name.ToUpper()}_{b.Name.ToUpper()}_SERVICE";
+                        bindingName = $"{s.Description.Name.ToUpper()}__{b.Name.ToUpper()}";
                     }
-                    set(bindingName, b.Address);
-                    set($"{bindingName}_PROTOCOL", b.Protocol);
+                    
+                    if (!string.IsNullOrEmpty(b.ConnectionString))
+                    {
+                        // Special case
+                        set($"CONNECTIONSTRING__{bindingName}", b.ConnectionString);
+                    }
+
+                    if (!string.IsNullOrEmpty(b.Protocol))
+                    {
+                        set($"{bindingName}__SERVICE__PROTOCOL", b.Protocol);
+                    }
+
+                    if (b.Port != null)
+                    {
+                        set($"{bindingName}__SERVICE__PORT", b.Port.ToString());
+                    }
+
+                    set($"{bindingName}__SERVICE__HOST", b.Host ?? "localhost");
                 }
             }
         }

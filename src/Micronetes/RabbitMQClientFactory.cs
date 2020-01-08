@@ -17,7 +17,6 @@ namespace Micronetes
 
         public IModel CreateClient(string name)
         {
-            var address = _configuration.GetAddress(name);
             var protocol = _configuration.GetProtocol(name);
 
             if (!string.Equals("rabbitmq", protocol, StringComparison.OrdinalIgnoreCase))
@@ -25,13 +24,10 @@ namespace Micronetes
                 throw new NotSupportedException($"Unsupported protocol {protocol}");
             }
 
-            // This should be host:port
-            var uri = new Uri(address);
-
             return _clients.GetOrAdd(name, n =>
             {
                 // REVIEW: What about the lifetime of these connections? Do they timeout?
-                var factory = new ConnectionFactory() { HostName = uri.Host, Port = uri.Port };
+                var factory = new ConnectionFactory() { HostName = _configuration.GetHost(name), Port = _configuration.GetPort(name) };
                 var connection = factory.CreateConnection();
                 var model = connection.CreateModel();
 

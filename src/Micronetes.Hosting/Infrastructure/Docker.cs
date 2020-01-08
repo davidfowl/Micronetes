@@ -27,14 +27,12 @@ namespace Micronetes.Hosting.Infrastructure
             }
 
             var binding = service.Description.DefaultBinding;
-            var uri = new Uri(binding.Address);
-
-            var command = $"run --rm -d {environmentArguments} -p {uri.Port}:{uri.Port} --name {service.Description.Name.ToLower()} {service.Description.DockerImage}";
+            var command = $"run --rm -d {environmentArguments} -p {binding.Port}:{binding.Port} --name {service.Description.Name.ToLower()} {service.Description.DockerImage}";
 
             service.Status["dockerCommand"] = command;
 
             var dockerInfo = new DockerInformation();
-            
+
             dockerInfo.Thread = new Thread(() =>
             {
                 logger.LogInformation("Running docker command {Command}", command);
@@ -58,7 +56,7 @@ namespace Micronetes.Hosting.Infrastructure
                 service.State = ServiceState.Running;
 
                 logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
-                
+
                 logger.LogInformation("Collecting docker logs for {ServiceName}.", service.Description.Name);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",

@@ -26,7 +26,7 @@ namespace Worker
         {
             try
             {
-                IModel queue = await ConnectAsync();
+                IModel queue = await ConnectAsync(cancellationToken);
 
                 queue.QueueDeclare(queue: "orders",
                                      durable: false,
@@ -51,7 +51,7 @@ namespace Worker
                 throw;
             }
         }
-        private async Task<IModel> ConnectAsync()
+        private async Task<IModel> ConnectAsync(CancellationToken cancellationToken)
         {
             ExceptionDispatchInfo edi = null;
             for (int i = 0; i < 5; i++)
@@ -70,7 +70,7 @@ namespace Worker
                     _logger.LogError(0, ex, "Failed to start listening to rabbit mq");
                 }
 
-                await Task.Delay(5000);
+                await Task.Delay(5000, cancellationToken);
             }
 
             edi.Throw();
