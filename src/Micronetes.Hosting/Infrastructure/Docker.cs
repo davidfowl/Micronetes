@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
@@ -16,29 +18,39 @@ namespace Micronetes.Hosting.Infrastructure
                 return Task.CompletedTask;
             }
 
+            var serviceDescription = service.Description;
             var environmentArguments = "";
 
-            if (service.Description.Configuration != null)
+            if (serviceDescription.Configuration != null)
             {
-                foreach (var env in service.Description.Configuration)
+                foreach (var env in serviceDescription.Configuration)
                 {
                     environmentArguments += $"--env {env.Key}={env.Value} ";
                 }
             }
 
-            var binding = service.Description.DefaultBinding;
+            var dockerInfo = new DockerInformation()
+            {
+                Threads = new Thread[service.Description.Replicas.Value]
+            };
 
-            var dockerInfo = new DockerInformation();
-
-            void RunDockerContainer()
+            void RunDockerContainer(Dictionary<int, int> ports)
             {
                 var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
                 var status = service.Replicas[replica] = new ServiceReplica();
 
-                var command = $"run --rm -d {environmentArguments} -p {binding.Port}:{binding.Port} --name {replica} {service.Description.DockerImage}";
+                var hasPorts = ports?.Any() ?? false;
+                var portString = hasPorts ? string.Join(" ", ports.Select(p => $"-p {p.Value}:{p.Key}")) : "";
+
+                var command = $"run --rm -d {environmentArguments} {portString} --name {replica} {service.Description.DockerImage}";
                 logger.LogInformation("Running docker command {Command}", command);
 
                 status["dockerCommand"] = command;
+
+                if (hasPorts)
+                {
+                    status["ports"] = ports.Values;
+                }
 
                 var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
@@ -94,8 +106,38 @@ namespace Micronetes.Hosting.Infrastructure
                 logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
             };
 
-            dockerInfo.Thread = new Thread(RunDockerContainer);
-            dockerInfo.Thread.Start();
+            if (serviceDescription.Bindings.Count > 0)
+            {
+                // Each replica is assigned a list of internal ports, one mapped to each external
+                // port
+                for (int i = 0; i < serviceDescription.Replicas; i++)
+                {
+                    var ports = new Dictionary<int, int>();
+                    foreach (var binding in serviceDescription.Bindings)
+                    {
+                        if (binding.Port == null)
+                        {
+                            continue;
+                        }
+
+                        ports[binding.Port.Value] = service.PortMap[binding.Port.Value][i];
+                    }
+
+                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(ports));
+                }
+            }
+            else
+            {
+                for (int i = 0; i < service.Description.Replicas; i++)
+                {
+                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(null));
+                }
+            }
+
+            for (int i = 0; i < service.Description.Replicas; i++)
+            {
+                dockerInfo.Threads[i].Start();
+            }
 
             service.Items[typeof(DockerInformation)] = dockerInfo;
 
@@ -108,13 +150,16 @@ namespace Micronetes.Hosting.Infrastructure
             {
                 di.StoppingTokenSource.Cancel();
 
-                di.Thread.Join();
+                foreach (var t in di.Threads)
+                {
+                    t.Join();
+                }
             }
         }
 
         private class DockerInformation
         {
-            public Thread Thread { get; set; }
+            public Thread[] Threads { get; set; }
             public CancellationTokenSource StoppingTokenSource { get; set; } = new CancellationTokenSource();
         }
     }

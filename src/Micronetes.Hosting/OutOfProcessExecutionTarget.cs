@@ -55,7 +55,7 @@ namespace Micronetes.Hosting
             service.Status["executablePath"] = path;
             service.Status["workingDir"] = contentRoot;
 
-            var state = new ProcessState
+            var processInfo = new ProcessInfo
             {
                 Threads = new Thread[service.Description.Replicas.Value]
             };
@@ -69,7 +69,7 @@ namespace Micronetes.Hosting
                 var environment = new Dictionary<string, string>();
                 application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
-                while (!state.StoppedTokenSource.IsCancellationRequested)
+                while (!processInfo.StoppedTokenSource.IsCancellationRequested)
                 {
                     var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
                     var status = service.Replicas[replica] = new ServiceReplica();
@@ -120,7 +120,7 @@ namespace Micronetes.Hosting
                                 status["pid"] = pid;
                             },
                             throwOnError: false,
-                            cancellationToken: state.StoppedTokenSource.Token);
+                            cancellationToken: processInfo.StoppedTokenSource.Token);
 
                         status["exitCode"] = result.ExitCode;
                         service.State = ServiceState.NotRunning;
@@ -161,23 +161,23 @@ namespace Micronetes.Hosting
                         ports.Add(service.PortMap[binding.Port.Value][i]);
                     }
 
-                    state.Threads[i] = new Thread(() => RunApplication(ports));
+                    processInfo.Threads[i] = new Thread(() => RunApplication(ports));
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    state.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<int>()));
+                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<int>()));
                 }
             }
 
             for (int i = 0; i < service.Description.Replicas; i++)
             {
-                state.Threads[i].Start();
+                processInfo.Threads[i].Start();
             }
 
-            service.Items[typeof(ProcessState)] = state;
+            service.Items[typeof(ProcessInfo)] = processInfo;
 
             return Task.CompletedTask;
         }
@@ -186,7 +186,7 @@ namespace Micronetes.Hosting
         {
             static void KillProcess(Service service)
             {
-                if (service.Items.TryGetValue(typeof(ProcessState), out var stateObj) && stateObj is ProcessState state)
+                if (service.Items.TryGetValue(typeof(ProcessInfo), out var stateObj) && stateObj is ProcessInfo state)
                 {
                     // Cancel the token before stopping the process
                     state.StoppedTokenSource.Cancel();
@@ -219,7 +219,7 @@ namespace Micronetes.Hosting
             return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
-        private class ProcessState
+        private class ProcessInfo
         {
             public Thread[] Threads { get; set; }
 

@@ -39,6 +39,7 @@ namespace Micronetes.Hosting
                 .UseSerilog((context, configuration) =>
                 {
                     configuration
+                        // .MinimumLevel.Verbose()
                         .Filter.ByExcluding(Matching.FromSource("Microsoft"))
                         .Enrich
                         .FromLogContext()
@@ -55,7 +56,7 @@ namespace Micronetes.Hosting
 
                         foreach (var service in application.Services.Values)
                         {
-                            if (service.Description.ProjectFile == null)
+                            if (service.Description.External)
                             {
                                 // We eventually want to proxy everything, this is temporary
                                 continue;
@@ -97,6 +98,8 @@ namespace Micronetes.Hosting
                                 {
                                     long count = 0;
 
+                                    // o.UseConnectionLogging("Micronetes");
+
                                     o.Run(async connection =>
                                     {
                                         var notificationFeature = connection.Features.Get<IConnectionLifetimeNotificationFeature>();
@@ -105,19 +108,18 @@ namespace Micronetes.Hosting
 
                                         try
                                         {
-                                            var target = new TcpClient();
+                                            using var target = new TcpClient();
                                             var port = ports[next];
                                             await target.ConnectAsync(IPAddress.Loopback, port);
 
-                                            var targetStream = target.GetStream();
+                                            using var targetStream = target.GetStream();
 
                                             // external -> internal
                                             var reading = Task.Run(() => connection.Transport.Input.CopyToAsync(targetStream, notificationFeature.ConnectionClosedRequested));
                                             // internal -> external
                                             var writing = Task.Run(() => targetStream.CopyToAsync(connection.Transport.Output, notificationFeature.ConnectionClosedRequested));
 
-                                            await reading;
-                                            await writing;
+                                            await Task.WhenAll(reading, writing);
                                         }
                                         catch (OperationCanceledException)
                                         {
