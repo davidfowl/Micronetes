@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 
 namespace Micronetes
@@ -7,16 +8,16 @@ namespace Micronetes
     internal class RabbitMQClientFactory : IClientFactory<IModel>, IDisposable
     {
         private readonly ConcurrentDictionary<string, RabbitMqClient> _clients = new ConcurrentDictionary<string, RabbitMqClient>(StringComparer.OrdinalIgnoreCase);
-        private readonly INameResolver _nameResolver;
+        private readonly IConfiguration _configuration;
 
-        public RabbitMQClientFactory(INameResolver nameResolver)
+        public RabbitMQClientFactory(IConfiguration configuration)
         {
-            _nameResolver = nameResolver;
+            _configuration = configuration;
         }
 
         public IModel CreateClient(string name)
         {
-            var binding = _nameResolver.GetBinding(name);
+            var binding = _configuration.GetBinding(name);
 
             if (!string.Equals("rabbitmq", binding.Protocol, StringComparison.OrdinalIgnoreCase))
             {

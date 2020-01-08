@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using Grpc.Net.Client;
+using Microsoft.Extensions.Configuration;
 using ProtoBuf.Grpc.Client;
 
 namespace Micronetes
@@ -8,7 +9,7 @@ namespace Micronetes
     public class DefaultClientFactory<TClient> : IClientFactory<TClient> where TClient : class
     {
         private readonly ConcurrentDictionary<string, TClient> _clients = new ConcurrentDictionary<string, TClient>(StringComparer.OrdinalIgnoreCase);
-        private readonly INameResolver _nameResolver;
+        private readonly IConfiguration _configuration;
 
         static DefaultClientFactory()
         {
@@ -16,14 +17,14 @@ namespace Micronetes
             GrpcClientFactory.AllowUnencryptedHttp2 = true;
         }
 
-        public DefaultClientFactory(INameResolver nameResolver)
+        public DefaultClientFactory(IConfiguration configuration)
         {
-            _nameResolver = nameResolver;
+            _configuration = configuration;
         }
 
         public TClient CreateClient(string name)
         {
-            var binding = _nameResolver.GetBinding(name);
+            var binding = _configuration.GetBinding(name);
 
             // TODO: Figure out what we should do here for defaults (or is it too much magic?)
 

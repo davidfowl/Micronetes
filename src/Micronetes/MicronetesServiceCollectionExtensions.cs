@@ -17,7 +17,6 @@ namespace Micronetes
             services.TryAddSingleton<IClientFactory<PubSubClient>, StackExchangeRedisPubSubClientFactory>();
             services.TryAddSingleton<IClientFactory<IModel>, RabbitMQClientFactory>();
             services.TryAddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
-            services.TryAddSingleton<INameResolver, ConfigurationNameResolver>();
             return services;
         }
     }

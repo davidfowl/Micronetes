@@ -9,7 +9,7 @@
   bindings:
     - name: default
       address: http://localhost:8000
-      protocol: http
+      protocol: grpc
 - name: rabbit
   dockerImage: rabbitmq
   bindings:

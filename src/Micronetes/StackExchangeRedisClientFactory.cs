@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
 
 namespace Micronetes
@@ -8,18 +9,18 @@ namespace Micronetes
     {
         private readonly ConcurrentDictionary<string, ConnectionMultiplexer> _clients = new ConcurrentDictionary<string, ConnectionMultiplexer>();
 
-        private readonly INameResolver _nameResolver;
+        private readonly IConfiguration _configuration;
 
-        public StackExchangeRedisClientFactory(INameResolver nameResolver)
+        public StackExchangeRedisClientFactory(IConfiguration configuration)
         {
-            _nameResolver = nameResolver;
+            _configuration = configuration;
         }
 
         public ConnectionMultiplexer CreateClient(string name)
         {
             // REVIEW: Settings options configuration from where?
 
-            var binding = _nameResolver.GetBinding(name);
+            var binding = _configuration.GetBinding(name);
 
             if (!string.Equals("redis", binding.Protocol, StringComparison.OrdinalIgnoreCase))
             {

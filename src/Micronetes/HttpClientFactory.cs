@@ -1,15 +1,16 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Net.Http;
+using Microsoft.Extensions.Configuration;
 
 namespace Micronetes
 {
     public class HttpClientFactory : IClientFactory<HttpClient>
     {
         private readonly ConcurrentDictionary<string, HttpClient> _clients = new ConcurrentDictionary<string, HttpClient>(StringComparer.OrdinalIgnoreCase);
-        private INameResolver _nameResolver;
+        private IConfiguration _nameResolver;
 
-        public HttpClientFactory(INameResolver nameResolver)
+        public HttpClientFactory(IConfiguration nameResolver)
         {
             _nameResolver = nameResolver;
         }

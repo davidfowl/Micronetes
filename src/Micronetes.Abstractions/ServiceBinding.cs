@@ -1,4 +1,7 @@
-﻿namespace Micronetes
+﻿using System;
+using Microsoft.Extensions.Configuration;
+
+namespace Micronetes
 {
     public readonly struct ServiceBinding
     {
