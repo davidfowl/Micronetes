@@ -72,7 +72,7 @@ Examples:
   dockerImage: redis:5
   bindings:
     - name: default
-      connectionString: Data Source=.;Initial Catalog=DB name;Integrated Security=True;MultipleActiveResultSets=True
+      connectionString: Data Source=.;Initial Catalog=DB name;Integrated Security=True;
 ```
 
 These service names are injected into the application as environment variables by the orchestrator. This allows the client code to access the address information at runtime.
