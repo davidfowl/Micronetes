@@ -98,10 +98,13 @@ namespace Micronetes.Hosting.Model
 
         internal void PopulateEnvironment(Service service, Action<string, string> set)
         {
-            // Inject normal configuration
-            foreach (var pair in service.Description.Configuration)
+            if (service.Description.Configuration != null)
             {
-                set(pair.Key, pair.Value);
+                // Inject normal configuration
+                foreach (var pair in service.Description.Configuration)
+                {
+                    set(pair.Key, pair.Value);
+                }
             }
 
             // Inject dependency information

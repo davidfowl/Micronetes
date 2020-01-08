@@ -64,6 +64,12 @@ namespace Micronetes.Host
                 }
 
                 var response = await client.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return;
+                }
+
                 var value = await response.Content.ReadAsStringAsync();
                 var element = JsonConvert.DeserializeObject(value);
 

@@ -18,9 +18,12 @@ namespace Micronetes.Hosting.Infrastructure
 
             var environmentArguments = "";
 
-            foreach (var env in service.Description.Configuration)
+            if (service.Description.Configuration != null)
             {
-                environmentArguments += $"--env {env.Key}={env.Value} ";
+                foreach (var env in service.Description.Configuration)
+                {
+                    environmentArguments += $"--env {env.Key}={env.Value} ";
+                }
             }
 
             var binding = service.Description.DefaultBinding;
