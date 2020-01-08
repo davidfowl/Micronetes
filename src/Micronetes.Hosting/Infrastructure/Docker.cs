@@ -27,18 +27,18 @@ namespace Micronetes.Hosting.Infrastructure
             }
 
             var binding = service.Description.DefaultBinding;
-            var command = $"run --rm -d {environmentArguments} -p {binding.Port}:{binding.Port} --name {service.Description.Name.ToLower()} {service.Description.DockerImage}";
-
-            service.Status["dockerCommand"] = command;
 
             var dockerInfo = new DockerInformation();
 
-            dockerInfo.Thread = new Thread(() =>
+            void RunDockerContainer()
             {
+                var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
+                var status = service.Replicas[replica] = new ServiceReplica();
+
+                var command = $"run --rm -d {environmentArguments} -p {binding.Port}:{binding.Port} --name {replica} {service.Description.DockerImage}";
                 logger.LogInformation("Running docker command {Command}", command);
 
-                var replica = service.Description.Name + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                var status = service.Replicas[replica] = new ServiceReplica();
+                status["dockerCommand"] = command;
 
                 var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
@@ -50,14 +50,25 @@ namespace Micronetes.Hosting.Infrastructure
                 }
 
                 var containerId = result.StandardOutput.Trim();
+
+                // There's a race condition that sometimes makes us miss the output
+                // so keep trying to get the container id
+                while (string.IsNullOrEmpty(containerId))
+                {
+                    // Try to get the ID of the container
+                    result = ProcessUtil.Run("docker", $"ps --no-trunc -f name={replica} --format " + "{{.ID}}");
+
+                    containerId = result.ExitCode == 0 ? result.StandardOutput.Trim() : null;
+                }
+
                 var shortContainerId = containerId.Substring(0, Math.Min(12, containerId.Length));
 
                 status["containerId"] = shortContainerId;
                 service.State = ServiceState.Running;
 
-                logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
+                logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                logger.LogInformation("Collecting docker logs for {ServiceName}.", service.Description.Name);
+                logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
                     outputDataReceived: data =>
@@ -74,15 +85,16 @@ namespace Micronetes.Hosting.Infrastructure
                     throwOnError: false,
                     cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
-                logger.LogInformation("docker logs collection for {ServiceName} complete with exit code {ExitCode}", service.Description.Name, result.ExitCode);
+                logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
 
-                logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
+                logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
                 result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false);
 
-                logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", service.Description.Name.ToLower(), shortContainerId, result.ExitCode);
-            });
+                logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+            };
 
+            dockerInfo.Thread = new Thread(RunDockerContainer);
             dockerInfo.Thread.Start();
 
             service.Items[typeof(DockerInformation)] = dockerInfo;
