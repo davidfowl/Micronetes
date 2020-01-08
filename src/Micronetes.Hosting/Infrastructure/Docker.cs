@@ -31,7 +31,7 @@ namespace Micronetes.Hosting.Infrastructure
             service.Status["dockerCommand"] = command;
 
             var dockerInfo = new DockerInformation();
-
+            
             dockerInfo.Thread = new Thread(() =>
             {
                 logger.LogInformation("Running docker command {Command}", command);
@@ -55,9 +55,7 @@ namespace Micronetes.Hosting.Infrastructure
                 service.State = ServiceState.Running;
 
                 logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", service.Description.Name.ToLower(), shortContainerId);
-
-                service.Items[typeof(DockerInformation)] = dockerInfo;
-
+                
                 logger.LogInformation("Collecting docker logs for {ServiceName}.", service.Description.Name);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
@@ -79,6 +77,8 @@ namespace Micronetes.Hosting.Infrastructure
             });
 
             dockerInfo.Thread.Start();
+
+            service.Items[typeof(DockerInformation)] = dockerInfo;
 
             return Task.CompletedTask;
         }
