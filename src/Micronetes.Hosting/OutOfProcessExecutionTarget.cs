@@ -110,11 +110,11 @@ namespace Micronetes.Hosting
 
                                 if (hasPorts)
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => p.ToString())));
                                 }
                                 else
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => p.ToString())));
+                                    _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
                                 }
 
                                 status["pid"] = pid;
