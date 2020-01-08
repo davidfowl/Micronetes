@@ -5,10 +5,12 @@ using System.CommandLine.Invocation;
 using System.CommandLine.Rendering;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
 using Micronetes.Hosting;
 using Micronetes.Hosting.Model;
+using Newtonsoft.Json;
 
 namespace Micronetes.Host
 {
@@ -20,6 +22,7 @@ namespace Micronetes.Host
 
             command.Add(RunCommand(args));
             command.Add(NewCommand());
+            command.Add(BrowseCommand());
 
             command.Description = "Process manager and orchestrator for microservices.";
 
@@ -39,6 +42,35 @@ namespace Micronetes.Host
 
             var parser = builder.Build();
             return await parser.InvokeAsync(args);
+        }
+
+        private static Command BrowseCommand()
+        {
+            var command = new Command("show", "show the status of running services");
+
+            command.AddArgument(new Argument("resource")
+            {
+                Arity = ArgumentArity.ZeroOrOne
+            });
+
+            command.Handler = CommandHandler.Create<IConsole, string>(async (console, resource) =>
+            {
+                var client = new HttpClient();
+
+                var url = "http://localhost:3745";
+                if (!string.IsNullOrEmpty(resource))
+                {
+                    url += $"/api/v1/{resource}";
+                }
+
+                var response = await client.GetAsync(url);
+                var value = await response.Content.ReadAsStringAsync();
+                var element = JsonConvert.DeserializeObject(value);
+
+                console.Out.WriteLine(element.ToString());
+            });
+
+            return command;
         }
 
         private static Command NewCommand()
