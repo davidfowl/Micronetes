@@ -66,6 +66,10 @@ namespace Micronetes.Hosting.Infrastructure
                             service.Logs.Add(data);
                         }
                     },
+                    onStart: pid =>
+                    {
+                        status["logsPid"] = pid;
+                    },
                     throwOnError: false,
                     cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
