@@ -8,6 +8,40 @@ This project is broken into 2 loosely coupled components:
 
 ## Micronetes CLI
 
+The Micronetes CLI is an orchestrator that coordinates multiple applications running both locally and remotely to make developing easier. The core model is an application which is made up of several services. 
+
+```yaml
+- name: web
+  project: Web\Web.csproj
+  replicas: 2
+  bindings:
+    - port: 5005
+- name: worker
+  project: Worker\Worker.csproj
+  replicas: 3
+- name: rabbitmq
+  dockerImage: rabbitmq
+  bindings:
+    - port: 5672
+```
+
+**Reference**
+
+```yaml
+- name: string  # name of the service
+  project: string  # msbuild project path (relative to this file)
+  executable: string # path to an executable (relative to this file)
+  workingDirectory: string # working directory of the process (relative to this file)
+  args: string # arguments to pass to the process
+  replicas: number # number of times to launch the application
+  env: # environment variables
+  bindings: # array of bindings (ports, connection strings etc)
+    name: string # name of the binding
+    port: number # port of the binding
+    host: string # host of the binding
+    connectionString: # connection string of the binding
+```
+
 ### Service Descriptions
 
 A service description is yaml file with list of services. Services can have multiple bindings that describe how the application can connect to it.
