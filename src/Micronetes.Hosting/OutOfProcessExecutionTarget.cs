@@ -47,13 +47,28 @@ namespace Micronetes.Hosting
             }
 
             var serviceName = serviceDescription.Name;
-            var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.ProjectFile));
-            var path = GetExePath(fullProjectPath);
-            var contentRoot = Path.GetDirectoryName(fullProjectPath);
 
-            service.Status["projectFilePath"] = fullProjectPath;
+            var path = "";
+            var workingDirectory = "";
+            var args = service.Description.Args;
+
+            if (serviceDescription.ProjectFile != null)
+            {
+                var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.ProjectFile));
+                path = GetExePath(fullProjectPath);
+                workingDirectory = Path.GetDirectoryName(fullProjectPath);
+
+                service.Status["projectFilePath"] = fullProjectPath;
+            }
+            else
+            {
+                path = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Executable));
+                workingDirectory = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.WorkingDirectory));
+            }
+
             service.Status["executablePath"] = path;
-            service.Status["workingDir"] = contentRoot;
+            service.Status["workingDirectory"] = workingDirectory;
+            service.Status["args"] = args;
 
             var processInfo = new ProcessInfo
             {
@@ -63,11 +78,16 @@ namespace Micronetes.Hosting
             void RunApplication(IEnumerable<int> ports)
             {
                 var hasPorts = ports.Any();
-                var args = hasPorts ? "--urls=" + string.Join(";", ports.Select(p => $"http://localhost:{p}")) : "";
                 var restarts = 0;
 
                 var environment = new Dictionary<string, string>();
                 application.PopulateEnvironment(service, (k, v) => environment[k] = v);
+
+                if (hasPorts)
+                {
+                    // These ports should also be passed in not assuming ASP.NET Core
+                    environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"http://localhost:{p}"));
+                }
 
                 while (!processInfo.StoppedTokenSource.IsCancellationRequested)
                 {
@@ -78,7 +98,6 @@ namespace Micronetes.Hosting
 
                     status["exitCode"] = null;
                     status["pid"] = null;
-                    status["commandLineArgs"] = args;
 
                     if (hasPorts)
                     {
@@ -93,7 +112,7 @@ namespace Micronetes.Hosting
                     {
                         var result = ProcessUtil.Run(path, args,
                             environmentVariables: environment,
-                            workingDirectory: contentRoot,
+                            workingDirectory: workingDirectory,
                             outputDataReceived: data =>
                             {
                                 if (data == null)
