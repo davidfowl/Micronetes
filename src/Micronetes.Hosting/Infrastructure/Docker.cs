@@ -76,7 +76,6 @@ namespace Micronetes.Hosting.Infrastructure
                 var shortContainerId = containerId.Substring(0, Math.Min(12, containerId.Length));
 
                 status["containerId"] = shortContainerId;
-                service.State = ServiceState.Running;
 
                 logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 

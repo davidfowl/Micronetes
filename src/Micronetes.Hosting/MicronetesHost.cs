@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.Pipelines;
 using System.Linq;
 using System.Net;
@@ -39,7 +40,7 @@ namespace Micronetes.Hosting
                 .UseSerilog((context, configuration) =>
                 {
                     configuration
-                        // .MinimumLevel.Verbose()
+                        .MinimumLevel.Verbose()
                         .Filter.ByExcluding(Matching.FromSource("Microsoft"))
                         .Enrich
                         .FromLogContext()
@@ -81,6 +82,13 @@ namespace Micronetes.Hosting
                                     continue;
                                 }
 
+                                //if (service.Description.Replicas == 1)
+                                //{
+                                //    // No need to proxy
+                                //    service.PortMap[binding.Port.Value] = new List<int> { binding.Port.Value };
+                                //    continue;
+                                //}
+
                                 var ports = new List<int>();
 
                                 for (int i = 0; i < service.Description.Replicas; i++)
@@ -94,11 +102,11 @@ namespace Micronetes.Hosting
 
                                 service.PortMap[binding.Port.Value] = ports;
 
-                                options.ListenLocalhost(binding.Port.Value, o =>
+                                options.Listen(IPAddress.Loopback, binding.Port.Value, o =>
                                 {
                                     long count = 0;
 
-                                    // o.UseConnectionLogging("Micronetes");
+                                    // o.UseConnectionLogging("Micronetes.Proxy");
 
                                     o.Run(async connection =>
                                     {
@@ -106,28 +114,60 @@ namespace Micronetes.Hosting
 
                                         var next = (int)(Interlocked.Increment(ref count) % ports.Count);
 
+                                        NetworkStream targetStream = null;
+
                                         try
                                         {
-                                            using var target = new TcpClient();
+                                            var target = new Socket(SocketType.Stream, ProtocolType.Tcp)
+                                            {
+                                                NoDelay = true
+                                            };
                                             var port = ports[next];
+
+                                            logger.LogDebug("Attempting to connect to {ServiceName} listening on {ExternalPort}:{Port}", service.Description.Name, binding.Port, port);
+
                                             await target.ConnectAsync(IPAddress.Loopback, port);
 
-                                            using var targetStream = target.GetStream();
+                                            logger.LogDebug("Successfully connected to {ServiceName} listening on {ExternalPort}:{Port}", service.Description.Name, binding.Port, port);
+
+                                            targetStream = new NetworkStream(target, ownsSocket: true);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            logger.LogDebug(ex, "Proxy error for service {ServiceName}", service.Description.Name);
+
+                                            await targetStream.DisposeAsync();
+
+                                            connection.Abort();
+                                            return;
+                                        }
+
+                                        try
+                                        {
+                                            logger.LogDebug("Proxying traffic to {ServiceName} {ExternalPort}:{InternalPort}", service.Description.Name, binding.Port, ports[next]);
 
                                             // external -> internal
                                             var reading = Task.Run(() => connection.Transport.Input.CopyToAsync(targetStream, notificationFeature.ConnectionClosedRequested));
+
                                             // internal -> external
                                             var writing = Task.Run(() => targetStream.CopyToAsync(connection.Transport.Output, notificationFeature.ConnectionClosedRequested));
 
                                             await Task.WhenAll(reading, writing);
                                         }
-                                        catch (OperationCanceledException)
+                                        catch (OperationCanceledException ex)
                                         {
-
+                                            if (!notificationFeature.ConnectionClosedRequested.IsCancellationRequested)
+                                            {
+                                                logger.LogDebug(0, ex, "Proxy error for service {ServiceName}", service.Description.Name);
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            logger.LogDebug(0, ex, "Proxy error for service {ServiceName}", service.Description.Name);
                                         }
                                         finally
                                         {
-
+                                            await targetStream.DisposeAsync();
                                         }
 
                                         // This needs to reconnect to the target port(s) until its bound

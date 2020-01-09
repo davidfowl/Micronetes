@@ -11,8 +11,6 @@ namespace Micronetes.Hosting.Model
     {
         public ServiceDescription Description { get; set; }
 
-        public ServiceState State { get; set; }
-
         public ConcurrentDictionary<string, object> Status { get; set; } = new ConcurrentDictionary<string, object>();
 
         public ConcurrentDictionary<string, ServiceReplica> Replicas { get; set; } = new ConcurrentDictionary<string, ServiceReplica>();

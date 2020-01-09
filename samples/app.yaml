@@ -4,6 +4,8 @@
     - name: default
       port: 7000
       protocol: http
+  configuration:
+    ASPNETCORE_ENVIRONMENT: Development
 - name: backend
   projectFile: BackEnd/BackEnd.csproj
   replicas: 2
@@ -11,6 +13,8 @@
     - name: default
       port: 8000
       protocol: grpc
+  configuration:
+    ASPNETCORE_ENVIRONMENT: Development
 - name: rabbit
   dockerImage: rabbitmq
   bindings:
@@ -19,6 +23,8 @@
       protocol: rabbitmq
 - name: worker
   projectFile: Worker/Worker.csproj
+  configuration:
+    ASPNETCORE_ENVIRONMENT: Development
 - name: redis
   dockerImage: redis
   bindings:

@@ -76,7 +76,6 @@ namespace Micronetes.Hosting
                     // This isn't your host name
                     environment["APP_INSTANCE"] = replica;
 
-                    service.State = ServiceState.Starting;
                     status["exitCode"] = null;
                     status["pid"] = null;
                     status["commandLineArgs"] = args;
@@ -106,8 +105,6 @@ namespace Micronetes.Hosting
                             },
                             onStart: pid =>
                             {
-                                service.State = ServiceState.Running;
-
                                 if (hasPorts)
                                 {
                                     _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => p.ToString())));
@@ -123,8 +120,6 @@ namespace Micronetes.Hosting
                             cancellationToken: processInfo.StoppedTokenSource.Token);
 
                         status["exitCode"] = result.ExitCode;
-                        service.State = ServiceState.NotRunning;
-
                     }
                     catch (Exception ex)
                     {
