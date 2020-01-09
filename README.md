@@ -44,6 +44,7 @@ There is also a mini control plane built in that can be used to view the state o
   workingDirectory: string # working directory of the process (relative to this file)
   args: string # arguments to pass to the process
   replicas: number # number of times to launch the application
+  external: bool # This service is external to avoid provisioning
   env: # environment variables
   bindings: # array of bindings (ports, connection strings etc)
     name: string # name of the binding
@@ -125,7 +126,7 @@ IClientFactory<HttpClient> clientFactory = ...
 var defaultClient = clientFactory.CreateClient("myweb");
 
 // Access the management port of the MyWeb service
-var managementClient = clientFactory.CreateClient("myweb/management");
+var managementClient = clientFactory.CreateClient("myweb:management");
 ```
 
 Most services will have a single binding so accessing them by service name directly should work.
