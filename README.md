@@ -1,37 +1,14 @@
 # Micronetes
 
-.NET Microservices made easy. This project is trying to tackle a couple of things:
-- Have standard interfaces for common communication paradigms.
-   - PubSub
-   - Queues
-   - RPC
-   - HTTP
-- Abstract the idea of a service address.
-- Explore what it means to run a the microservice application locally (multiple projects with service discovery)
-- Explore what it means to deploy this application to kubernetes without changes to the code and have it just work.
+Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed systems easier.
 
-The core interface for client -> service communication the `IClientFactory<TClient>`:
+This project is broken into 2 loosely coupled components:
+- **The Micronetes CLI** - This is the orchestrator used for development and testing.
+- **The Micronetes SDK** - This adds a layer on top of the naming conventions introduced by the orchestor.
 
-```C#
-public interface IClientFactory<TClient>
-{
-    TClient CreateClient(string name);
-}
-```
+## Micronetes CLI
 
-## Client abstractions
-
-- HTTP - `HttpClient`
-- PubSub - `PubSubClient`
-- Queue - ???
-- RPC - ???
-
-The intent is to make decouple service addresses from the implementation. There are 2 flavours of TClient:
-
-1. TClient can be an abstraction. 
-2. TClient can be a concrete client implementation (like ConnectionMultipler).
-
-## Service Descriptions
+### Service Descriptions
 
 A service description is yaml file with list of services. Services can have multiple bindings that describe how the application can connect to it.
 
@@ -108,3 +85,26 @@ var managementClient = clientFactory.CreateClient("myweb/management");
 ```
 
 Most services will have a single binding so accessing them by service name directly should work.
+
+##  The Micronetes SDK
+
+The Micronetes SDK uses the conventions introduced by the orchestrator and introduces primitives that simplify microservice communication. The core abstraction for communicating with another microservice is an `IClientFactory<TClient>`.
+
+```C#
+public interface IClientFactory<TClient>
+{
+    TClient CreateClient(string name);
+}
+```
+
+### Client abstractions
+
+- HTTP - `HttpClient`
+- PubSub - `PubSubClient`
+- Queue - TBD
+- RPC - TBD
+
+The intent is to make decouple service addresses from the implementation. There are 2 flavours of TClient:
+
+1. TClient can be an abstraction. 
+2. TClient can be a concrete client implementation (like ConnectionMultipler).
