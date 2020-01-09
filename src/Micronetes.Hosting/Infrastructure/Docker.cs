@@ -52,7 +52,7 @@ namespace Micronetes.Hosting.Infrastructure
                     status["ports"] = ports.Values;
                 }
 
-                var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
+                var result = ProcessUtil.Run("docker", command, throwOnError: false);
 
                 if (result.ExitCode != 0)
                 {

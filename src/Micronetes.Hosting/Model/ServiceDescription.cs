@@ -13,7 +13,5 @@ namespace Micronetes.Hosting.Model
         public Dictionary<string, string> Annotations { get; set; } = new Dictionary<string, string>();
         public List<ServiceBinding> Bindings { get; set; } = new List<ServiceBinding>();
         public Dictionary<string, string> Configuration { get; set; } = new Dictionary<string, string>();
-
-        internal ServiceBinding DefaultBinding => Bindings.FirstOrDefault(b => b.IsDefault);
     }
 }

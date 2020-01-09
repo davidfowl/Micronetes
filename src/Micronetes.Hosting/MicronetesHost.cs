@@ -154,6 +154,10 @@ namespace Micronetes.Hosting
 
                                             await Task.WhenAll(reading, writing);
                                         }
+                                        catch (ConnectionResetException)
+                                        {
+                                            // Connection was reset
+                                        }
                                         catch (OperationCanceledException ex)
                                         {
                                             if (!notificationFeature.ConnectionClosedRequested.IsCancellationRequested)

@@ -230,11 +230,7 @@ namespace Micronetes.Hosting
 
             if (service.Description.DockerImage == null)
             {
-                var defaultBinding = service.Description.DefaultBinding;
-                if (defaultBinding != null)
-                {
-                    env.Add(new V1EnvVar("ASPNETCORE_URLS", "https://localhost:" + defaultBinding.Port));
-                }
+                // We need to configure the bindings here
             }
 
             application.PopulateEnvironment(service, (k, v) =>

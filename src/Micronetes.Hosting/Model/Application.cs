@@ -15,7 +15,7 @@ namespace Micronetes.Hosting.Model
         public Application(ServiceDescription[] services)
         {
             var map = new Dictionary<string, Service>();
-            
+
             // TODO: Do validation here
             foreach (var s in services)
             {
@@ -116,43 +116,50 @@ namespace Micronetes.Hosting.Model
                 }
             }
 
+            void SetBinding(string bindingName, ServiceBinding b)
+            {
+                if (!string.IsNullOrEmpty(b.ConnectionString))
+                {
+                    // Special case for connection strings
+                    set($"CONNECTIONSTRING__{bindingName}", b.ConnectionString);
+                }
+
+                if (!string.IsNullOrEmpty(b.Protocol))
+                {
+                    // ASPNET.Core specific
+                    set($"{bindingName}__SERVICE__PROTOCOL", b.Protocol);
+                    set($"{bindingName}_SERVICE_PROTOCOL", b.Protocol);
+                }
+
+                if (b.Port != null)
+                {
+                    set($"{bindingName}__SERVICE__PORT", b.Port.ToString());
+                    set($"{bindingName}_SERVICE_PORT", b.Port.ToString());
+                }
+
+                set($"{bindingName}__SERVICE__HOST", b.Host ?? "localhost");
+                set($"{bindingName}_SERVICE_HOST", b.Host ?? "localhost");
+            }
+
             // Inject dependency information
             foreach (var s in Services.Values)
             {
-                if (s == service)
-                {
-                    continue;
-                }
-
                 foreach (var b in s.Description.Bindings)
                 {
-                    string bindingName;
-                    if (b.IsDefault)
+                    if (string.IsNullOrEmpty(b.Name))
                     {
-                        bindingName = $"{s.Description.Name.ToUpper()}";
+                        SetBinding(s.Description.Name.ToUpper(), b);
                     }
                     else
                     {
-                        bindingName = $"{s.Description.Name.ToUpper()}__{b.Name.ToUpper()}";
+                        string bindingName = $"{s.Description.Name.ToUpper()}__{b.Name.ToUpper()}";
+                        SetBinding(bindingName, b);
                     }
-                    
-                    if (!string.IsNullOrEmpty(b.ConnectionString))
-                    {
-                        // Special case
-                        set($"CONNECTIONSTRING__{bindingName}", b.ConnectionString);
-                    }
+                }
 
-                    if (!string.IsNullOrEmpty(b.Protocol))
-                    {
-                        set($"{bindingName}__SERVICE__PROTOCOL", b.Protocol);
-                    }
-
-                    if (b.Port != null)
-                    {
-                        set($"{bindingName}__SERVICE__PORT", b.Port.ToString());
-                    }
-
-                    set($"{bindingName}__SERVICE__HOST", b.Host ?? "localhost");
+                if (s.Description.Bindings.Count == 1)
+                {
+                    SetBinding(s.Description.Name.ToUpper(), s.Description.Bindings[0]);
                 }
             }
         }
