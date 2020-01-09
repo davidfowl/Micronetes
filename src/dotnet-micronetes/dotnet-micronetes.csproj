@@ -5,6 +5,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <PackAsTool>true</PackAsTool>
     <RootNamespace>Micronetes.Host</RootNamespace>
+    <AssemblyName>micronetes</AssemblyName>
     <ToolCommandName>micronetes</ToolCommandName>
     <Description>Process manager and orchestrator for microservices.</Description>
   </PropertyGroup>
