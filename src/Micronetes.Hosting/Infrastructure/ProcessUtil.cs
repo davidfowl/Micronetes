@@ -23,13 +23,6 @@ namespace Micronetes.Hosting
             Action<int> onStart = null,
             CancellationToken cancellationToken = default)
         {
-            var logWorkingDirectory = workingDirectory ?? Directory.GetCurrentDirectory();
-
-            if (log)
-            {
-                // Log.WriteLine($"[{logWorkingDirectory}] {filename} {arguments}");
-            }
-
             var process = new Process()
             {
                 StartInfo =
@@ -69,19 +62,12 @@ namespace Micronetes.Hosting
                     {
                         outputBuilder.AppendLine(e.Data);
                     }
-
-                    if (log)
-                    {
-                        // Log.WriteLine(e.Data);
-                    }
-
                 };
 
                 var errorBuilder = new StringBuilder();
                 process.ErrorDataReceived += (_, e) =>
                 {
                     errorBuilder.AppendLine(e.Data);
-                    //Log.WriteLine(e.Data);
                 };
 
                 process.Start();
@@ -117,12 +103,6 @@ namespace Micronetes.Hosting
                 if (throwOnError && process.ExitCode != 0)
                 {
                     throw new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}");
-                }
-
-
-                if (log)
-                {
-                    // Log.WriteLine($"Exit code: {process.ExitCode}");
                 }
 
                 return new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode);
