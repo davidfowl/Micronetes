@@ -39,21 +39,23 @@ A service description is yaml file with list of services. Services can have mult
 - name: redis
   dockerImage: redis:5
   bindings:
-    - name: default
-      port: 6379
+    - port: 6379
       protocol: redis
 ```
 
 Examples:
 
+**Executable listening on port 80**
+
 ```yaml
 - name: dapr
   executable: daprd
   bindings:
-    - name: default
-      port: 80
+    - port: 80
       protocol: dapr
 ```
+
+**HTTP(s)**
 
 ```yaml
 - name: myweb
@@ -65,14 +67,6 @@ Examples:
     - name: management
       port: 3000
       protocol: http
-```
-
-```yaml
-- name: db
-  dockerImage: redis:5
-  bindings:
-    - name: default
-      connectionString: Data Source=.;Initial Catalog=DB name;Integrated Security=True;
 ```
 
 These service names are injected into the application as environment variables by the orchestrator. This allows the client code to access the address information at runtime.
@@ -107,13 +101,10 @@ e.g.
 ```C#
 // Access the default port of the MyWeb service
 IClientFactory<HttpClient> clientFactory = ...
-var defaultClient = clientFactory.CreateClient("MyWeb");
-
-// Access the default port of the MyWeb service explictly
-defaultClient = clientFactory.CreateClient("MyWeb/default");
+var defaultClient = clientFactory.CreateClient("myweb");
 
 // Access the management port of the MyWeb service
-var managementClient = clientFactory.CreateClient("MyWeb/management");
+var managementClient = clientFactory.CreateClient("myweb/management");
 ```
 
 Most services will have a single binding so accessing them by service name directly should work.
