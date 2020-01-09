@@ -63,7 +63,7 @@ namespace Micronetes.Hosting
             void RunApplication(IEnumerable<int> ports)
             {
                 var hasPorts = ports.Any();
-                var args = hasPorts ? string.Join(" ", ports.Select(p => $"--urls=http://localhost:{p}")) : "";
+                var args = hasPorts ? "--urls=" + string.Join(";", ports.Select(p => $"http://localhost:{p}")) : "";
                 var restarts = 0;
 
                 var environment = new Dictionary<string, string>();
