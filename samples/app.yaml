@@ -24,7 +24,7 @@
 - name: worker
   projectFile: Worker/Worker.csproj
   configuration:
-    ASPNETCORE_ENVIRONMENT: Development
+    DOTNET_ENVIRONMENT: Development
 - name: redis
   dockerImage: redis
   bindings:
