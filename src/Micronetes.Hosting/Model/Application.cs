@@ -116,29 +116,43 @@ namespace Micronetes.Hosting.Model
                 }
             }
 
-            void SetBinding(string bindingName, ServiceBinding b)
+            void SetBinding(string serviceName, ServiceBinding b)
             {
+                var configName = "";
+                var envName = "";
+
+                if (string.IsNullOrEmpty(b.Name))
+                {
+                    configName = serviceName;
+                    envName = serviceName;
+                }
+                else
+                {
+                    configName = $"{serviceName.ToUpper()}__{b.Name.ToUpper()}";
+                    envName = $"{serviceName.ToUpper()}_{b.Name.ToUpper()}";
+                }
+
                 if (!string.IsNullOrEmpty(b.ConnectionString))
                 {
                     // Special case for connection strings
-                    set($"CONNECTIONSTRING__{bindingName}", b.ConnectionString);
+                    set($"CONNECTIONSTRING__{configName}", b.ConnectionString);
                 }
 
                 if (!string.IsNullOrEmpty(b.Protocol))
                 {
-                    // ASPNET.Core specific
-                    set($"{bindingName}__SERVICE__PROTOCOL", b.Protocol);
-                    set($"{bindingName}_SERVICE_PROTOCOL", b.Protocol);
+                    // IConfiguration specific (double underscore ends up telling the configuration provider to use it as a separator)
+                    set($"SERVICE__{configName}__PROTOCOL", b.Protocol);
+                    set($"{envName}_SERVICE_PROTOCOL", b.Protocol);
                 }
 
                 if (b.Port != null)
                 {
-                    set($"{bindingName}__SERVICE__PORT", b.Port.ToString());
-                    set($"{bindingName}_SERVICE_PORT", b.Port.ToString());
+                    set($"SERVICE__{configName}__PORT", b.Port.ToString());
+                    set($"{envName}_SERVICE_PORT", b.Port.ToString());
                 }
 
-                set($"{bindingName}__SERVICE__HOST", b.Host ?? "localhost");
-                set($"{bindingName}_SERVICE_HOST", b.Host ?? "localhost");
+                set($"SERVICE__{configName}__HOST", b.Host ?? "localhost");
+                set($"{envName}_SERVICE_HOST", b.Host ?? "localhost");
             }
 
             // Inject dependency information
@@ -146,20 +160,7 @@ namespace Micronetes.Hosting.Model
             {
                 foreach (var b in s.Description.Bindings)
                 {
-                    if (string.IsNullOrEmpty(b.Name))
-                    {
-                        SetBinding(s.Description.Name.ToUpper(), b);
-                    }
-                    else
-                    {
-                        string bindingName = $"{s.Description.Name.ToUpper()}__{b.Name.ToUpper()}";
-                        SetBinding(bindingName, b);
-                    }
-                }
-
-                if (s.Description.Bindings.Count == 1)
-                {
-                    SetBinding(s.Description.Name.ToUpper(), s.Description.Bindings[0]);
+                    SetBinding(s.Description.Name.ToUpper(), b);
                 }
             }
         }

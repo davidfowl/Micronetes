@@ -110,10 +110,10 @@ The following binding:
 Will be translated into the following `IConfiguration` keys:
 
 ```
-myweb:service:port=80
-myweb:service:protocol=http
-myweb:service:management:port=3000
-myweb:service:management:protocol=http
+service:myweb:port=80
+service:myweb:protocol=http
+service:myweb:management:port=3000
+service:myweb:management:protocol=http
 ```
 
 The "default" binding can be accesed by the name of the service. To access other addresses, the full name must be accessed:

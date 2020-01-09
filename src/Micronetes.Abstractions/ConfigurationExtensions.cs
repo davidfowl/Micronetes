@@ -11,7 +11,7 @@ namespace Microsoft.Extensions.Configuration
 
         public static string GetHost(this IConfiguration configuration, string name)
         {
-            var serviceAddress = configuration[$"{name}:service:host"];
+            var serviceAddress = configuration[$"service:{name}:host"];
 
             if (string.IsNullOrEmpty(serviceAddress))
             {
@@ -23,7 +23,7 @@ namespace Microsoft.Extensions.Configuration
 
         public static int GetPort(this IConfiguration configuration, string name)
         {
-            var port = configuration[$"{name}:service:port"];
+            var port = configuration[$"service:{name}:port"];
 
             if (string.IsNullOrEmpty(port))
             {
@@ -36,7 +36,7 @@ namespace Microsoft.Extensions.Configuration
 
         public static string GetProtocol(this IConfiguration configuration, string name)
         {
-            var protocol = configuration[$"{name}:service:protocol"];
+            var protocol = configuration[$"service:{name}:protocol"];
 
             if (string.IsNullOrEmpty(protocol))
             {
