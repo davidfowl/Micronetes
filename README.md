@@ -29,6 +29,7 @@ The Micronetes CLI is an orchestrator that coordinates multiple applications run
 
 ```yaml
 - name: string  # name of the service
+  dockerImage: string  # a docker image to run locally
   project: string  # msbuild project path (relative to this file)
   executable: string # path to an executable (relative to this file)
   workingDirectory: string # working directory of the process (relative to this file)
