@@ -40,20 +40,20 @@ namespace Micronetes.Hosting.Model
 
             foreach (var d in descriptions)
             {
-                if (d.ProjectFile == null)
+                if (d.Project == null)
                 {
                     continue;
                 }
 
                 // Try to populate more from launch settings
-                var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(contextDirectory, d.ProjectFile)));
+                var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(contextDirectory, d.Project)));
                 var launchSettingsPath = Path.Combine(projectDirectory, "Properties", "launchSettings.json");
 
                 if (File.Exists(launchSettingsPath))
                 {
                     // If there's a launchSettings.json, then use it to get addresses
                     var root = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(launchSettingsPath));
-                    var key = Path.GetFileNameWithoutExtension(d.ProjectFile);
+                    var key = Path.GetFileNameWithoutExtension(d.Project);
                     var profiles = root.GetProperty("profiles");
                     if (profiles.TryGetProperty(key, out var projectSettings))
                     {

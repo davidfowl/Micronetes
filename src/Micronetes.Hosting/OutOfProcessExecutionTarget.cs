@@ -52,9 +52,9 @@ namespace Micronetes.Hosting
             var workingDirectory = "";
             var args = service.Description.Args;
 
-            if (serviceDescription.ProjectFile != null)
+            if (serviceDescription.Project != null)
             {
-                var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.ProjectFile));
+                var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Project));
                 path = GetExePath(fullProjectPath);
                 workingDirectory = Path.GetDirectoryName(fullProjectPath);
 
