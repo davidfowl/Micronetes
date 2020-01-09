@@ -1,6 +1,6 @@
 # Micronetes
 
-Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed systems easier.
+Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed applications easier.
 
 This project is broken into 2 loosely coupled components:
 - **The Micronetes CLI** - This is the orchestrator used for development and testing.
@@ -8,7 +8,9 @@ This project is broken into 2 loosely coupled components:
 
 ## Micronetes CLI
 
-The Micronetes CLI is an orchestrator that coordinates multiple applications running both locally and remotely to make developing easier. The core model is an application which is made up of several services. 
+The Micronetes CLI is an orchestrator that coordinates multiple applications running both locally and remotely to make developing easier. The core model is an application which is made up of several services. Here's an example of a small distributed application:
+
+**app.yaml**
 
 ```yaml
 - name: web
@@ -24,6 +26,13 @@ The Micronetes CLI is an orchestrator that coordinates multiple applications run
   bindings:
     - port: 5672
 ```
+
+**micronetes run app.yaml** will run launch 2 instances of the Web and 3 of Worker and will `docker run` the rabbitmq image. There's a built-in proxy that will load balance the traffic in a round-robin matter between replicas of the various processes. It will also make those services available via environment variables following the convention described later in this section.
+
+There is also a mini control plane built in that can be used to view the state of the services and to view the logs of the various services. As an example, you can run the following commands
+- `micronetes show services` - This will show the state of all services
+- `micronetes show services/web` - This will show the state of the web service
+- `micronetes show logs/rabbitmq` - This will show the logs for rabbitmq
 
 **Reference**
 
