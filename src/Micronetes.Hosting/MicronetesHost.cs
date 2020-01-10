@@ -292,7 +292,7 @@ namespace Micronetes.Hosting
                 return new KubernetesExecutionTarget(logger);
             }
 
-            return new OutOfProcessExecutionTarget(logger);
+            return new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
         }
     }
 }

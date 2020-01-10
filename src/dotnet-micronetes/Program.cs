@@ -125,6 +125,11 @@ namespace Micronetes.Host
                 Required = false
             });
 
+            command.AddOption(new Option("--debug")
+            {
+                Required = false
+            });
+
             command.AddArgument(argument);
 
             command.Handler = CommandHandler.Create<IConsole, string>((console, manifest) =>

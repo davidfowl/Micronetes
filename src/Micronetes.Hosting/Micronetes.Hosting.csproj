@@ -16,4 +16,8 @@
     <PackageReference Include="YamlDotNet" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Micronetes.Hosting.Runtime\Micronetes.Hosting.Runtime.csproj" />
+  </ItemGroup>
+
 </Project>

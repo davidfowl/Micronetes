@@ -27,7 +27,7 @@ namespace Micronetes
             return _clients.GetOrAdd(name, n =>
             {
                 // REVIEW: What about the lifetime of these connections? Do they timeout?
-                var factory = new ConnectionFactory() { HostName = _configuration.GetHost(name), Port = _configuration.GetPort(name) };
+                var factory = new ConnectionFactory() { HostName = _configuration.GetHost(name), Port = _configuration.GetPort(name).Value };
                 var connection = factory.CreateConnection();
                 var model = connection.CreateModel();
 

@@ -14,10 +14,12 @@ namespace Micronetes.Hosting
     public class OutOfProcessExecutionTarget : IExecutionTarget
     {
         private readonly ILogger _logger;
+        private readonly bool _debugMode;
 
-        public OutOfProcessExecutionTarget(ILogger logger)
+        public OutOfProcessExecutionTarget(ILogger logger, bool debugMode = true)
         {
             _logger = logger;
+            _debugMode = debugMode;
         }
 
         public Task StartAsync(Application application)
@@ -78,6 +80,7 @@ namespace Micronetes.Hosting
             service.Status["executablePath"] = path;
             service.Status["workingDirectory"] = workingDirectory;
             service.Status["args"] = args;
+            service.Status["debugMode"] = _debugMode;
 
             var processInfo = new ProcessInfo
             {
@@ -91,6 +94,11 @@ namespace Micronetes.Hosting
 
                 var environment = new Dictionary<string, string>();
                 application.PopulateEnvironment(service, (k, v) => environment[k] = v);
+
+                if (_debugMode)
+                {
+                    environment["DOTNET_STARTUP_HOOKS"] = typeof(Hosting.Runtime.HostingRuntimeHelpers).Assembly.Location;
+                }
 
                 if (hasPorts)
                 {
@@ -107,6 +115,7 @@ namespace Micronetes.Hosting
 
                     status["exitCode"] = null;
                     status["pid"] = null;
+                    status["env"] = environment;
 
                     if (hasPorts)
                     {

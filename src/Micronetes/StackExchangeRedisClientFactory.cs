@@ -30,7 +30,7 @@ namespace Micronetes
             return _clients.GetOrAdd(name, n =>
             {
                 var config = new ConfigurationOptions();
-                config.EndPoints.Add(_configuration.GetHost(name), _configuration.GetPort(name));
+                config.EndPoints.Add(_configuration.GetHost(name), _configuration.GetPort(name).Value);
 
                 // REVIEW: What about async? Do we make sure that clients all have a an explicit Connect
                 return ConnectionMultiplexer.Connect(config);

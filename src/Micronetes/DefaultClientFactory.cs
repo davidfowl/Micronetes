@@ -31,7 +31,7 @@ namespace Micronetes
 
             switch (protocol?.ToLower())
             {
-                case "grpc":
+                case "http":
                 case null:
                     return _clients.GetOrAdd(name, k => GrpcChannel.ForAddress(address).CreateGrpcService<TClient>());
                 default:

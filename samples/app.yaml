@@ -9,7 +9,7 @@
   replicas: 2
   bindings:
     - port: 8000
-      protocol: grpc
+      protocol: http
   env:
     ASPNETCORE_ENVIRONMENT: Development
 - name: rabbit
