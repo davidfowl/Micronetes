@@ -42,6 +42,7 @@ namespace Micronetes
                 var env = sp.GetRequiredService<IHostEnvironment>();
 
                 builder.AddRequestCollector();
+                builder.AddDependencyCollector();
 
                 if (!string.IsNullOrEmpty(zipkinUrl))
                 {

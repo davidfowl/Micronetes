@@ -82,12 +82,12 @@ namespace Micronetes.Hosting
                                     continue;
                                 }
 
-                                //if (service.Description.Replicas == 1)
-                                //{
-                                //    // No need to proxy
-                                //    service.PortMap[binding.Port.Value] = new List<int> { binding.Port.Value };
-                                //    continue;
-                                //}
+                                if (service.Description.Replicas == 1)
+                                {
+                                    // No need to proxy
+                                    service.PortMap[binding.Port.Value] = new List<int> { binding.Port.Value };
+                                    continue;
+                                }
 
                                 var ports = new List<int>();
 
