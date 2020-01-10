@@ -6,13 +6,28 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Trace.Configuration;
 using RabbitMQ.Client;
+using Serilog;
+using Serilog.Events;
 using StackExchange.Redis;
 
 namespace Micronetes
 {
     public static class MicronetesServiceCollectionExtensions
     {
-        public static IServiceCollection AddMicronetes(this IServiceCollection services)
+        public static IHostBuilder UseMicronetes(this IHostBuilder builder)
+        {
+            return builder.ConfigureServices(services => services.AddMicronetes())
+                          .UseSerilog((context, config) =>
+                          {
+                              config.MinimumLevel.Debug()
+                              .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                              .Enrich.FromLogContext()
+                              .WriteTo.Console()
+                              .WriteTo.Elasticsearch();
+                          });
+        }
+
+        private static IServiceCollection AddMicronetes(this IServiceCollection services)
         {
             services.TryAddSingleton(typeof(IClientFactory<>), typeof(DefaultClientFactory<>));
             services.TryAddSingleton<IClientFactory<ConnectionMultiplexer>, StackExchangeRedisClientFactory>();

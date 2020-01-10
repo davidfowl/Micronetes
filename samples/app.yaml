@@ -31,3 +31,7 @@
   bindings:
     - port: 9411
       protocol: http
+- name: grafana
+  dockerImage: grafana/grafana
+  bindings:
+    - port: 3000

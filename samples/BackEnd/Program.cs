@@ -15,10 +15,7 @@ namespace BackEnd
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .ConfigureServices(services =>
-                {
-                    services.AddMicronetes();
-                })
+                .UseMicronetes()
                 .ConfigureWebHostDefaults(web =>
                 {
                     web.UseStartup<Startup>()

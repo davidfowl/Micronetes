@@ -19,10 +19,10 @@ namespace Worker
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                       .ConfigureServices(services =>
-                       {
-                           services.AddMicronetes();
-                           services.AddHostedService<QueueWorker>();
-                       });
+            .UseMicronetes()
+            .ConfigureServices(services =>
+            {
+                services.AddHostedService<QueueWorker>();
+            });
     }
 }
