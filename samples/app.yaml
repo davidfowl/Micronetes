@@ -26,3 +26,8 @@
   bindings:
     - port: 6379
       protocol: redis
+- name: zipkin
+  dockerImage: openzipkin/zipkin
+  bindings:
+    - port: 9411
+      protocol: http

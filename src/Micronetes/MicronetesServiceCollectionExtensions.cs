@@ -33,7 +33,7 @@ namespace Micronetes
                     builder.UseZipkin(o =>
                     {
                         o.ServiceName = env.ApplicationName;
-                        o.Endpoint = new Uri(zipkinUrl);
+                        o.Endpoint = new Uri(zipkinUrl + "api/v2/spans");
                     });
                 }
             });

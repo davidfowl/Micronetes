@@ -14,7 +14,7 @@ namespace Microsoft.Extensions.Configuration
                 return null;
             }
 
-            return scheme + "://" + host + ":" + port;
+            return scheme + "://" + host + ":" + port + "/";
         }
 
         public static string GetHost(this IConfiguration configuration, string name)
