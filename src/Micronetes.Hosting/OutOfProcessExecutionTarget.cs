@@ -50,7 +50,7 @@ namespace Micronetes.Hosting
 
             var path = "";
             var workingDirectory = "";
-            var args = service.Description.Args;
+            var args = service.Description.Args ?? "";
 
             if (serviceDescription.Project != null)
             {
@@ -63,7 +63,16 @@ namespace Micronetes.Hosting
             else
             {
                 path = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Executable));
-                workingDirectory = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.WorkingDirectory));
+                workingDirectory = serviceDescription.WorkingDirectory != null ?
+                    Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.WorkingDirectory)) :
+                    Path.GetDirectoryName(path);
+
+                // If this is a dll then use dotnet to run it
+                if (Path.GetExtension(path) == ".dll")
+                {
+                    args = $"\"{path}\" {args}".Trim();
+                    path = "dotnet";
+                }
             }
 
             service.Status["executablePath"] = path;
@@ -106,7 +115,7 @@ namespace Micronetes.Hosting
 
                     service.Status["restarts"] = restarts;
 
-                    _logger.LogInformation("Launching service {ServiceName} from {ExePath}", replica, path);
+                    _logger.LogInformation("Launching service {ServiceName} from {ExePath} {args}", replica, path, args);
 
                     try
                     {

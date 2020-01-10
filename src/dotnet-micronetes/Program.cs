@@ -88,9 +88,21 @@ namespace Micronetes.Host
 
             command.Handler = CommandHandler.Create<IConsole>((console) =>
             {
+                if (File.Exists("app.yaml"))
+                {
+                    console.Out.WriteLine("\"app.yaml\" already exists.");
+                    return;
+                }
+
                 File.WriteAllText("app.yaml", @"- name: app
-  projectFile: app.csproj
-  ");
+  # project: app.csproj # msbuild project path (relative to this file)
+  # executable: app.exe # path to an executable (relative to this file)
+  # args: --arg1=3 # arguments to pass to the process
+  # replicas: 5 # number of times to launch the application
+  # env: # environment variables
+  # bindings: # optional array of bindings (ports, connection strings)
+    # port: 8080 # number port of the binding
+");
                 console.Out.WriteLine("Created \"app.yaml\"");
             });
 
