@@ -84,7 +84,7 @@ namespace Micronetes.Hosting
                 Threads = new Thread[service.Description.Replicas.Value]
             };
 
-            void RunApplication(IEnumerable<int> ports)
+            void RunApplication(IEnumerable<(int Port, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
                 var restarts = 0;
@@ -95,7 +95,7 @@ namespace Micronetes.Hosting
                 if (hasPorts)
                 {
                     // These ports should also be passed in not assuming ASP.NET Core
-                    environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"http://localhost:{p}"));
+                    environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"{p.Protocol ?? "http"}://localhost:{p.Port}"));
                 }
 
                 while (!processInfo.StoppedTokenSource.IsCancellationRequested)
@@ -135,7 +135,7 @@ namespace Micronetes.Hosting
                             {
                                 if (hasPorts)
                                 {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => p.ToString())));
+                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => $"{p.Protocol ?? "http"}://localhost:{p.Port}")));
                                 }
                                 else
                                 {
@@ -173,7 +173,7 @@ namespace Micronetes.Hosting
                 // port
                 for (int i = 0; i < serviceDescription.Replicas; i++)
                 {
-                    var ports = new List<int>();
+                    var ports = new List<(int, string)>();
                     foreach (var binding in serviceDescription.Bindings)
                     {
                         if (binding.Port == null)
@@ -181,7 +181,7 @@ namespace Micronetes.Hosting
                             continue;
                         }
 
-                        ports.Add(service.PortMap[binding.Port.Value][i]);
+                        ports.Add((service.PortMap[binding.Port.Value][i], binding.Protocol));
                     }
 
                     processInfo.Threads[i] = new Thread(() => RunApplication(ports));
@@ -191,7 +191,7 @@ namespace Micronetes.Hosting
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<int>()));
+                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<(int, string)>()));
                 }
             }
 
