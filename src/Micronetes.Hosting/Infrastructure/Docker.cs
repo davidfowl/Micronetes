@@ -42,7 +42,7 @@ namespace Micronetes.Hosting.Infrastructure
                 var hasPorts = ports?.Any() ?? false;
                 var portString = hasPorts ? string.Join(" ", ports.Select(p => $"-p {p.Value}:{p.Key}")) : "";
 
-                var command = $"run --rm -d {environmentArguments} {portString} --name {replica} {service.Description.DockerImage}";
+                var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage}";
                 logger.LogInformation("Running docker command {Command}", command);
 
                 status["dockerCommand"] = command;
@@ -56,7 +56,7 @@ namespace Micronetes.Hosting.Infrastructure
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}", service.Description.Name, result.ExitCode);
+                    logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
                     service.Replicas.TryRemove(replica, out _);
                     return;
                 }
@@ -103,6 +103,10 @@ namespace Micronetes.Hosting.Infrastructure
                 result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false);
 
                 logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+
+                result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false);
+
+                logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
             };
 
             if (serviceDescription.Bindings.Count > 0)

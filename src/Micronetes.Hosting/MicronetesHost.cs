@@ -258,7 +258,7 @@ namespace Micronetes.Hosting
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
-            var target = GetTarget(args, logger);
+            var target = new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
 
             await host.StartAsync();
 
@@ -283,11 +283,6 @@ namespace Micronetes.Hosting
             {
                 await target.StopAsync(application);
             }
-        }
-
-        private static IExecutionTarget GetTarget(string[] args, Microsoft.Extensions.Logging.ILogger logger)
-        {
-            return new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
         }
     }
 }
