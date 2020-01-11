@@ -51,11 +51,20 @@ namespace Micronetes.Hosting
                 {
                     web.ConfigureKestrel(options =>
                     {
-                        // This is lame but it allows running multiple versions of this
-                        // we should also allow ports to be specified as input
-                        options.Listen(IPAddress.Loopback, 0);
-
                         var logger = options.ApplicationServices.GetRequiredService<ILogger<MicronetesHost>>();
+                        var config = options.ApplicationServices.GetRequiredService<IConfiguration>();
+
+                        if (config["port"] != null && int.TryParse(config["port"], out int cpPort))
+                        {
+                            // Use the specified port
+                            options.Listen(IPAddress.Loopback, cpPort);
+                        }
+                        else
+                        {
+                            // This is lame but it allows running multiple versions of this
+                            // we should also allow ports to be specified as input
+                            options.Listen(IPAddress.Loopback, 0);
+                        }
 
                         foreach (var service in application.Services.Values)
                         {

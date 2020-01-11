@@ -43,10 +43,25 @@ The Micronetes CLI is an orchestrator that coordinates multiple applications run
 
 **micronetes run app.yaml** will run launch 2 instances of the Web and 3 of Worker and will `docker run` the rabbitmq image. There's a built-in proxy that will load balance the traffic in a round-robin matter between replicas of the various processes. It will also make those services available via environment variables following the convention described later in this section.
 
-There is also a mini control plane built in that can be used to view the state of the services and to view the logs of the various services. As an example, you can run the following commands
-- `micronetes show services` - This will show the state of all services
-- `micronetes show services/web` - This will show the state of the web service
-- `micronetes show logs/rabbitmq` - This will show the logs for rabbitmq
+There is also a mini control plane built in that can be used to view the state of the services and to view the logs of the various services. As an example:
+
+```
+> micronetes run app.yaml
+[03:26:23 INF] Mapping external port 5005 to internal port(s) 51016, 51017 for web
+[03:26:23 INF] API server running on http://127.0.0.1:51018
+[03:26:23 INF] Launching service web_65758656-1 from /apps/Web/bin/Debug/netcoreapp3.1/Web
+[03:26:23 INF] Launching service web_65758456-d from /apps/Web/bin/Debug/netcoreapp3.1/Web
+[03:26:23 INF] Launching service worker_e4cd0888-7 from /apps/Worker/bin/Debug/netcoreapp3.1/Worker
+[03:26:23 INF] worker_65758656-1 running on process id 8472
+[03:26:23 INF] web_e4cd0888-7 running on process id 21932 bound to http://localhost:51016
+[03:26:23 INF] web_65758456-d running on process id 21932 bound to http://localhost:51017
+...
+```
+
+You can run the following commands
+- `curl http://127.0.0.1:51018/api/v1/services` - This will show the state of all services
+- `curl http://127.0.0.1:51018/api/v1/web` - This will show the state of the web service
+- `curl http://127.0.0.1:51018/api/v1/logs/worker` - This will show the logs for worker
 
 **Reference**
 

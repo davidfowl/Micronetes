@@ -22,7 +22,6 @@ namespace Micronetes.Host
 
             command.Add(RunCommand(args));
             command.Add(NewCommand());
-            command.Add(BrowseCommand());
 
             command.Description = "Process manager and orchestrator for microservices.";
 
@@ -42,42 +41,6 @@ namespace Micronetes.Host
 
             var parser = builder.Build();
             return await parser.InvokeAsync(args);
-        }
-
-        private static Command BrowseCommand()
-        {
-            var command = new Command("show", "show the status of running services");
-
-            command.AddArgument(new Argument("resource")
-            {
-                Arity = ArgumentArity.ZeroOrOne
-            });
-
-            command.Handler = CommandHandler.Create<IConsole, string>(async (console, resource) =>
-            {
-                var client = new HttpClient();
-
-                var url = "http://localhost:3745";
-                if (!string.IsNullOrEmpty(resource))
-                {
-                    url += $"/api/v1/{resource}";
-                }
-
-                var response = await client.GetAsync(url);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    console.Out.WriteLine(await response.Content.ReadAsStringAsync());
-                    return;
-                }
-
-                var value = await response.Content.ReadAsStringAsync();
-                var element = JsonConvert.DeserializeObject(value);
-
-                console.Out.WriteLine(element.ToString());
-            });
-
-            return command;
         }
 
         private static Command NewCommand()
@@ -117,13 +80,17 @@ namespace Micronetes.Host
 
             var argument = new Argument("manifest")
             {
+                Description = "A directory with a manifest or a manifest",
                 Arity = ArgumentArity.ZeroOrOne
             };
 
             command.AddOption(new Option("--port")
             {
+                Description = "Port to run the run control plane on",
+                Argument = new Argument<int>("port"),
                 Required = false
             });
+            
 
             command.AddOption(new Option("--debug")
             {
