@@ -2,6 +2,20 @@
 
 Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed applications easier.
 
+## Why not minikube, k3s, k5s, microk8s etc?
+
+The things that lead me to this solution:
+- Developers mostly care about the projects and code they write.
+- It's very hard today to run multiple applications (replicas or different applications) locally and 
+set them up so that they can talk.
+    - It's even hard to experiment with different application architectures that require multiple projects/applications.
+- Keeping a docker file in sync with the project/solution is painful.
+- Building a docker image on every change is too slow for the developer inner loop.
+- When developing, you only need to run a small number of applications and dependencies.
+- This should be an on-ramp to running in something like kubernetes because the basic primitives should be very similar (service, replicas, ingress (TBD)).
+
+## So what is it?
+
 This project is broken into 2 loosely coupled components:
 - **The Micronetes CLI** - This is the orchestrator used for development and testing.
 - **The Micronetes SDK** - This adds a layer on top of the naming conventions introduced by the orchestor.
