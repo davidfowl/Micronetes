@@ -31,7 +31,8 @@ namespace Micronetes.Hosting
             var options = new JsonSerializerOptions()
             {
                 PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
             };
 
             options.Converters.Add(ServiceReplica.JsonConverter);
