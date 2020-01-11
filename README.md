@@ -112,12 +112,9 @@ Examples:
 - name: myweb
   projectFile: MyWeb/Web.csproj
   bindings:
-    - name: default
-      port: 80
-      protocol: http
+    - port: 80
     - name: management
       port: 3000
-      protocol: http
 ```
 
 These service names are injected into the application as environment variables by the orchestrator. This allows the client code to access the address information at runtime.
@@ -128,12 +125,9 @@ The following binding:
 - name: myweb
   projectFile: MyWeb/Web.csproj
   bindings:
-    - name: default
-      port: 80
-      protocol: http
+    - port: 80
     - name: management
       port: 3000
-      protocol: http
 ```
 
 Will be translated into the following `IConfiguration` keys:
