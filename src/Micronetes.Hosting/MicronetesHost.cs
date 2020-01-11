@@ -51,7 +51,9 @@ namespace Micronetes.Hosting
                 {
                     web.ConfigureKestrel(options =>
                     {
-                        options.ListenLocalhost(3745);
+                        // This is lame but it allows running multiple versions of this
+                        // we should also allow ports to be specified as input
+                        options.Listen(IPAddress.Loopback, 0);
 
                         var logger = options.ApplicationServices.GetRequiredService<ILogger<MicronetesHost>>();
 
@@ -262,7 +264,7 @@ namespace Micronetes.Hosting
 
             await host.StartAsync();
 
-            logger.LogInformation("API server running on http://localhost:3745");
+            logger.LogInformation("API server running on {Address}", serverAddressesFeature.Addresses.First());
 
             try
             {

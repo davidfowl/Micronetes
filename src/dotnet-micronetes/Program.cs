@@ -120,7 +120,7 @@ namespace Micronetes.Host
                 Arity = ArgumentArity.ZeroOrOne
             };
 
-            command.AddOption(new Option("--k8s")
+            command.AddOption(new Option("--port")
             {
                 Required = false
             });

@@ -12,32 +12,25 @@
       protocol: http
   env:
     ASPNETCORE_ENVIRONMENT: Development
+- name: worker
+  project: Worker/Worker.csproj
+  env:
+    DOTNET_ENVIRONMENT: Development
+- name: zipkin
+  external: true
+  bindings:
+    - port: 9411
+- name: elastic
+  external: true
+  bindings:
+    - port: 9200
 - name: rabbit
   dockerImage: rabbitmq
   bindings:
     - port: 5672
       protocol: rabbitmq
-- name: worker
-  project: Worker/Worker.csproj
-  env:
-    DOTNET_ENVIRONMENT: Development
 - name: redis
   dockerImage: redis
   bindings:
     - port: 6379
       protocol: redis
-- name: zipkin
-  dockerImage: openzipkin/zipkin
-  bindings:
-    - port: 9411
-      protocol: http
-- name: grafana
-  dockerImage: grafana/grafana
-  bindings:
-    - port: 3000
-- name: elk # https://elk-docker.readthedocs.io/
-  dockerImage: sebp/elk
-  bindings:
-    - port: 5601
-    - port: 9200
-    - port: 5044

@@ -22,8 +22,15 @@ namespace Micronetes
                               config.MinimumLevel.Debug()
                               .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                               .Enrich.FromLogContext()
-                              .WriteTo.Console()
-                              .WriteTo.Elasticsearch();
+                              .Enrich.WithProperty("Application", context.HostingEnvironment.ApplicationName)
+                              .Enrich.WithProperty("Instance", context.Configuration["APP_INSTANCE"])
+                              .WriteTo.Console();
+
+                              var elasticSearchUrl = context.Configuration.GetUrl("elk:elastic") ?? context.Configuration.GetUrl("elastic");
+                              if (!string.IsNullOrEmpty(elasticSearchUrl))
+                              {
+                                  config.WriteTo.Elasticsearch(elasticSearchUrl);
+                              }
                           });
         }
 
