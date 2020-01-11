@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Threading;
 /// <summary>
 /// Startup hooks are pieces of code that will run before a users program main executes
@@ -13,6 +14,8 @@ internal class StartupHook
     /// </summary>
     public static void Initialize()
     {
+        Console.WriteLine("Waiting for debugger to attach...");
+
         while (!Debugger.IsAttached)
         {
             Thread.Sleep(1000);

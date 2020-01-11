@@ -287,11 +287,6 @@ namespace Micronetes.Hosting
 
         private static IExecutionTarget GetTarget(string[] args, Microsoft.Extensions.Logging.ILogger logger)
         {
-            if (args.Contains("--k8s") || args.Contains("--kubernetes"))
-            {
-                return new KubernetesExecutionTarget(logger);
-            }
-
             return new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
         }
     }
