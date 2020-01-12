@@ -168,8 +168,6 @@ namespace Micronetes.Hosting
 
                                 status["pid"] = pid;
 
-                                _logger.LogInformation("Collecting metrics for {ServiceName} on process id {PID}", replica, pid);
-
                                 metricsThread.Start(pid);
                             },
                             throwOnError: false,
@@ -279,6 +277,32 @@ namespace Micronetes.Hosting
 
         private void CollectMetrics(int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
         {
+            var hasEventPipe = false;
+
+            for (int i = 0; i < 10; ++i)
+            {
+                if (DiagnosticsClient.GetPublishedProcesses().Contains(processId))
+                {
+                    hasEventPipe = true;
+                    break;
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Thread.Sleep(500);
+            }
+
+            if (!hasEventPipe)
+            {
+                _logger.LogInformation("Process id {PID}, does not support event pipe", processId);
+                return;
+            }
+
+            _logger.LogInformation("Listening for event pipe events for {ServiceName} on process id {PID}", replicaName, processId);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 var providers = new List<EventPipeProvider>()
@@ -308,11 +332,15 @@ namespace Micronetes.Hosting
                 {
                     session = client.StartEventPipeSession(providers);
                 }
+                catch (EndOfStreamException)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
                     if (!cancellationToken.IsCancellationRequested)
                     {
-                        _logger.LogDebug(0, ex, "Failed to start the mertics session");
+                        _logger.LogDebug(0, ex, "Failed to start the event pipe session");
                     }
 
                     // We can't even start the session, wait until the process boots up again to start another metrics thread
@@ -348,6 +376,7 @@ namespace Micronetes.Hosting
                 try
                 {
                     var source = new EventPipeEventSource(session.EventStream);
+
                     source.Dynamic.All += (TraceEvent obj) =>
                     {
                         if (obj.EventName.Equals("EventCounters"))
@@ -373,7 +402,7 @@ namespace Micronetes.Hosting
                 }
                 catch (DiagnosticsClientException ex)
                 {
-                    _logger.LogDebug(0, ex, "Failed to start the mertics session");
+                    _logger.LogDebug(0, ex, "Failed to start the event pipe session");
                 }
                 catch (Exception)
                 {
@@ -385,7 +414,7 @@ namespace Micronetes.Hosting
                 }
             }
 
-            _logger.LogInformation("Metrics collection completed for {ServiceName} on process id {PID}", replicaName, processId);
+            _logger.LogInformation("Event pipe collection completed for {ServiceName} on process id {PID}", replicaName, processId);
         }
 
         private class ProcessInfo
