@@ -4,17 +4,18 @@ namespace Microsoft.Extensions.Configuration
 {
     public static class ConfigurationExtensions
     {
-        public static string GetUrl(this IConfiguration configuration, string name, string scheme = "http")
+        public static string GetUrl(this IConfiguration configuration, string name)
         {
             var host = configuration.GetHost(name);
             var port = configuration.GetPort(name);
+            var protocol = configuration.GetProtocol(name) ?? "http";
 
             if (string.IsNullOrEmpty(host) || port == null)
             {
                 return null;
             }
 
-            return scheme + "://" + host + ":" + port + "/";
+            return protocol + "://" + host + ":" + port + "/";
         }
 
         public static string GetHost(this IConfiguration configuration, string name)

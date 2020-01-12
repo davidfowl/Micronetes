@@ -9,7 +9,6 @@
   replicas: 2
   bindings:
     - port: 8000
-      protocol: http
   env:
     ASPNETCORE_ENVIRONMENT: Development
 - name: worker
