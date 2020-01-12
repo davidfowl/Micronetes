@@ -5,6 +5,7 @@ using System.IO.Pipelines;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -209,6 +211,8 @@ namespace Micronetes.Hosting
                                 {
                                     $"{context.Request.Scheme}://{context.Request.Host}/api/v1/services",
                                     $"{context.Request.Scheme}://{context.Request.Host}/api/v1/logs/{{service}}",
+                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/metrics",
+                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/metrics/{{service}}",
                                 },
                                 options);
                             });
@@ -260,6 +264,68 @@ namespace Micronetes.Hosting
                                 }
 
                                 await JsonSerializer.SerializeAsync(context.Response.Body, service.Logs, options);
+                            });
+
+                            endpoints.MapGet("/api/v1/metrics", async context =>
+                            {
+                                var sb = new StringBuilder();
+                                foreach (var s in application.Services.OrderBy(s => s.Key))
+                                {
+                                    sb.AppendLine($"# {s.Key} service");
+                                    foreach (var replica in s.Value.Replicas)
+                                    {
+                                        foreach (var metric in replica.Value.Metrics)
+                                        {
+                                            sb.Append($"dotnet_{metric.Key.Replace('-', '_')}");
+                                            sb.Append("{");
+                                            sb.Append($"service=\"{s.Key}\",");
+                                            sb.Append($"instance=\"{replica.Key}\"");
+                                            sb.Append("}");
+                                            sb.Append(" ");
+                                            sb.Append(metric.Value);
+                                            sb.AppendLine();
+                                        }
+                                    }
+                                    sb.AppendLine();
+                                }
+
+                                await context.Response.WriteAsync(sb.ToString());
+                            });
+
+                            endpoints.MapGet("/api/v1/metrics/{name}", async context =>
+                            {
+                                var sb = new StringBuilder();
+
+                                var name = (string)context.Request.RouteValues["name"];
+                                context.Response.ContentType = "application/json";
+
+                                if (!application.Services.TryGetValue(name, out var service))
+                                {
+                                    context.Response.StatusCode = 404;
+                                    await JsonSerializer.SerializeAsync(context.Response.Body, new
+                                    {
+                                        message = $"Unknown service {name}"
+                                    },
+                                    options);
+
+                                    return;
+                                }
+
+                                foreach (var replica in service.Replicas)
+                                {
+                                    foreach (var metric in replica.Value.Metrics)
+                                    {
+                                        sb.Append($"dotnet_{metric.Key.Replace('-', '_')}");
+                                        sb.Append("{");
+                                        sb.Append($"instance=\"{replica.Key}\"");
+                                        sb.Append("}");
+                                        sb.Append(" ");
+                                        sb.Append(metric.Value);
+                                        sb.AppendLine();
+                                    }
+                                }
+
+                                await context.Response.WriteAsync(sb.ToString());
                             });
                         });
                     });

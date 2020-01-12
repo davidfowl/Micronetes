@@ -36,6 +36,8 @@ namespace Micronetes.Hosting.Model
     {
         public static JsonConverter<ServiceReplica> JsonConverter = new Converter();
 
+        public Dictionary<string, string> Metrics { get; set; } = new Dictionary<string, string>();
+
         private class Converter : JsonConverter<ServiceReplica>
         {
             public override ServiceReplica Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

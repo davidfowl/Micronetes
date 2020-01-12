@@ -1,12 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Infrastructure;
+using Micronetes.Hosting.Metrics;
 using Micronetes.Hosting.Model;
+using Microsoft.Diagnostics.NETCore.Client;
+using Microsoft.Diagnostics.Tracing;
+using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
@@ -131,6 +137,10 @@ namespace Micronetes.Hosting
 
                     _logger.LogInformation("Launching service {ServiceName} from {ExePath} {args}", replica, path, args);
 
+                    var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
+
+                    var metricsThread = new Thread(state => CollectMetrics((int)state, replica, status, metricsTokenSource.Token));
+
                     try
                     {
                         var result = ProcessUtil.Run(path, args,
@@ -157,11 +167,22 @@ namespace Micronetes.Hosting
                                 }
 
                                 status["pid"] = pid;
+
+                                _logger.LogInformation("Collecting metrics for {ServiceName} on process id {PID}", replica, pid);
+
+                                metricsThread.Start(pid);
                             },
                             throwOnError: false,
                             cancellationToken: processInfo.StoppedTokenSource.Token);
 
                         status["exitCode"] = result.ExitCode;
+
+                        if (status["pid"] != null)
+                        {
+                            metricsTokenSource.Cancel();
+
+                            metricsThread.Join();
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -254,6 +275,117 @@ namespace Micronetes.Hosting
             // TODO: Use msbuild to get the target path
             var outputFileName = Path.GetFileNameWithoutExtension(projectFilePath) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
             return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
+        }
+
+        private void CollectMetrics(int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var providers = new List<EventPipeProvider>()
+                {
+                    new EventPipeProvider(
+                        "System.Runtime",
+                        EventLevel.Informational,
+                        (long)ClrTraceEventParser.Keywords.None,
+                        new Dictionary<string, string>() {
+                            { "EventCounterIntervalSec", "1" }
+                        }
+                    ),
+                    new EventPipeProvider(
+                        "Microsoft.AspNetCore.Hosting",
+                        EventLevel.Informational,
+                        (long)ClrTraceEventParser.Keywords.None,
+                        new Dictionary<string, string>() {
+                            { "EventCounterIntervalSec", "1" }
+                        }
+                    )
+                };
+
+                EventPipeSession session = null;
+                var client = new DiagnosticsClient(processId);
+
+                try
+                {
+                    session = client.StartEventPipeSession(providers);
+                }
+                catch (Exception ex)
+                {
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogDebug(0, ex, "Failed to start the mertics session");
+                    }
+
+                    // We can't even start the session, wait until the process boots up again to start another metrics thread
+                    break;
+                }
+
+                void StopSession()
+                {
+                    try
+                    {
+                        session.Stop();
+                    }
+                    catch (EndOfStreamException)
+                    {
+                        // If the app we're monitoring exits abruptly, this may throw in which case we just swallow the exception and exit gracefully.
+                    }
+                    // We may time out if the process ended before we sent StopTracing command. We can just exit in that case.
+                    catch (TimeoutException)
+                    {
+                    }
+                    // On Unix platforms, we may actually get a PNSE since the pipe is gone with the process, and Runtime Client Library
+                    // does not know how to distinguish a situation where there is no pipe to begin with, or where the process has exited
+                    // before dotnet-counters and got rid of a pipe that once existed.
+                    // Since we are catching this in StopMonitor() we know that the pipe once existed (otherwise the exception would've 
+                    // been thrown in StartMonitor directly)
+                    catch (PlatformNotSupportedException)
+                    {
+                    }
+                }
+
+                using var _ = cancellationToken.Register(() => StopSession());
+
+                try
+                {
+                    var source = new EventPipeEventSource(session.EventStream);
+                    source.Dynamic.All += (TraceEvent obj) =>
+                    {
+                        if (obj.EventName.Equals("EventCounters"))
+                        {
+                            IDictionary<string, object> payloadVal = (IDictionary<string, object>)(obj.PayloadValue(0));
+                            IDictionary<string, object> eventPayload = (IDictionary<string, object>)(payloadVal["Payload"]);
+
+                            ICounterPayload payload;
+                            if (eventPayload.ContainsKey("CounterType"))
+                            {
+                                payload = eventPayload["CounterType"].Equals("Sum") ? (ICounterPayload)new IncrementingCounterPayload(eventPayload) : (ICounterPayload)new CounterPayload(eventPayload);
+                            }
+                            else
+                            {
+                                payload = eventPayload.Count == 6 ? (ICounterPayload)new IncrementingCounterPayload(eventPayload) : (ICounterPayload)new CounterPayload(eventPayload);
+                            }
+
+                            replica.Metrics[payload.Name] = payload.Value;
+                        }
+                    };
+
+                    source.Process();
+                }
+                catch (DiagnosticsClientException ex)
+                {
+                    _logger.LogDebug(0, ex, "Failed to start the mertics session");
+                }
+                catch (Exception)
+                {
+                    // This fails if stop is called or if the process dies
+                }
+                finally
+                {
+                    session?.Dispose();
+                }
+            }
+
+            _logger.LogInformation("Metrics collection completed for {ServiceName} on process id {PID}", replicaName, processId);
         }
 
         private class ProcessInfo
