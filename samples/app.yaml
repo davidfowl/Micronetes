@@ -2,27 +2,13 @@
   project: FrontEnd/FrontEnd.csproj
   bindings:
     - port: 7000
-  env:
-    ASPNETCORE_ENVIRONMENT: Development
 - name: backend
   project: BackEnd/BackEnd.csproj
   replicas: 2
   bindings:
     - port: 8000
-  env:
-    ASPNETCORE_ENVIRONMENT: Development
 - name: worker
   project: Worker/Worker.csproj
-  env:
-    DOTNET_ENVIRONMENT: Development
-- name: zipkin
-  external: true
-  bindings:
-    - port: 9411
-- name: elastic
-  external: true
-  bindings:
-    - port: 9200
 - name: rabbit
   dockerImage: rabbitmq
   bindings:

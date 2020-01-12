@@ -92,7 +92,12 @@ namespace Micronetes.Hosting
                 var hasPorts = ports.Any();
                 var restarts = 0;
 
-                var environment = new Dictionary<string, string>();
+                var environment = new Dictionary<string, string>
+                {
+                    // Default to development environment
+                    ["DOTNET_ENVIRONMENT"] = "Development"
+                };
+
                 application.PopulateEnvironment(service, (k, v) => environment[k] = v);
 
                 if (_debugMode)

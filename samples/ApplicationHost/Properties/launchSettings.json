@@ -4,7 +4,7 @@
       "commandName": "Project",
       "commandLineArgs": "--port 3745",
       "launchBrowser": true,
-      "launchUrl": "http://localhost:3745/api/v1/services"
+      "launchUrl": "http://127.0.0.1:3745/api/v1/services"
     }
   }
 }
