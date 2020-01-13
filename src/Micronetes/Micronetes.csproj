@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Description>Opinionated Microservices stack. Supports messaging patterns, grpc and distributed tracing.</Description>
   </PropertyGroup>
 
   <ItemGroup>

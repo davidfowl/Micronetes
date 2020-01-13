@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>Runtime helpers for m8s host platform</Description>
   </PropertyGroup>
 
 </Project>
