@@ -100,7 +100,7 @@ namespace Micronetes.Hosting
                 Threads = new Thread[service.Description.Replicas.Value]
             };
 
-            void RunApplication(IEnumerable<(int Port, string Protocol)> ports)
+            void RunApplication(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
                 var restarts = 0;
@@ -122,6 +122,11 @@ namespace Micronetes.Hosting
                 {
                     // These ports should also be passed in not assuming ASP.NET Core
                     environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"{p.Protocol ?? "http"}://localhost:{p.Port}"));
+
+                    foreach (var p in ports)
+                    {
+                        environment[$"{p.Protocol?.ToUpper() ?? "HTTP"}_PORT"] = p.BindingPort.ToString();
+                    }
                 }
 
                 while (!processInfo.StoppedTokenSource.IsCancellationRequested)
@@ -213,7 +218,7 @@ namespace Micronetes.Hosting
                 // port
                 for (int i = 0; i < serviceDescription.Replicas; i++)
                 {
-                    var ports = new List<(int, string)>();
+                    var ports = new List<(int, int, string)>();
                     foreach (var binding in serviceDescription.Bindings)
                     {
                         if (binding.Port == null)
@@ -221,7 +226,7 @@ namespace Micronetes.Hosting
                             continue;
                         }
 
-                        ports.Add((service.PortMap[binding.Port.Value][i], binding.Protocol));
+                        ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
                     processInfo.Threads[i] = new Thread(() => RunApplication(ports));
@@ -231,7 +236,7 @@ namespace Micronetes.Hosting
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<(int, string)>()));
+                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<(int, int, string)>()));
                 }
             }
 
@@ -442,7 +447,7 @@ namespace Micronetes.Hosting
                         }
 
                         Exception exception = null;
-                        
+
                         var logger = loggerFactory.CreateLogger(categoryName);
 
                         using var scope = logger.BeginScope(scopeState);
