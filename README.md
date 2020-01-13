@@ -1,5 +1,9 @@
 # Micronetes
 
+[![feedz.io](https://img.shields.io/badge/endpoint.svg?url=https%3A%2F%2Ff.feedz.io%2Fdavidfowl%2Fmicronetes%2Fshield%2Fm8s%2Flatest&label=m8s)](https://f.feedz.io/davidfowl/micronetes/packages/m8s/latest/download)
+
+[![feedz.io](https://img.shields.io/badge/endpoint.svg?url=https%3A%2F%2Ff.feedz.io%2Fdavidfowl%2Fmicronetes%2Fshield%2FMicronetes%2Flatest&label=Micronetes)](https://f.feedz.io/davidfowl/micronetes/packages/Micronetes/latest/download)
+
 Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed applications easier.
 
 ## Why not minikube, k3s, k5s, microk8s etc?
@@ -187,3 +191,24 @@ The intent is to make decouple service addresses from the implementation. There 
 
 1. TClient can be an abstraction. 
 2. TClient can be a concrete client implementation (like ConnectionMultipler).
+
+## Using CI builds
+
+To use CI builds add the following nuget feed:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+    <packageSources>
+        <clear />
+        <add key="bedrockframework" value="https://f.feedz.io/davidfowl/micronetes/nuget/index.json" />
+        <add key="NuGet.org" value="https://api.nuget.org/v3/index.json" />
+    </packageSources>
+</configuration>
+```
+
+To install the **m8s** CLI use the following command:
+
+```
+dotnet tool install m8s --version {version} -g --add-source https://f.feedz.io/davidfowl/micronetes/nuget/index.json
+```
