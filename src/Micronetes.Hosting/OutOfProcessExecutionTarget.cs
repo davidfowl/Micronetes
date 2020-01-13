@@ -20,9 +20,11 @@ using Microsoft.Hosting.Logging;
 
 namespace Micronetes.Hosting
 {
-    public partial class OutOfProcessExecutionTarget : IExecutionTarget
+    public class OutOfProcessExecutionTarget : IExecutionTarget
     {
         private static readonly string MicrosoftExtensionsLoggingProviderName = "Microsoft-Extensions-Logging";
+        private static readonly string SystemRuntimeEventSourceName = "System.Runtime";
+        private static readonly string MicrosoftAspNetCoreHostingEventSourceName = "Microsoft.AspNetCore.Hosting";
 
         private readonly ILogger _logger;
         private readonly bool _debugMode;
@@ -144,7 +146,7 @@ namespace Micronetes.Hosting
 
                     var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
 
-                    var eventPipeThread = new Thread(state => CollectProcessEvents(application.LoggerFactory, service.Description.Name, (int)state, replica, status, metricsTokenSource.Token));
+                    var eventPipeThread = new Thread(state => ProcessEvents(application.LoggerFactory, service.Description.Name, (int)state, replica, status, metricsTokenSource.Token));
 
                     try
                     {
@@ -280,7 +282,7 @@ namespace Micronetes.Hosting
             return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
-        private void CollectProcessEvents(ILoggerFactory loggerFactory, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
+        private void ProcessEvents(ILoggerFactory loggerFactory, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
         {
             var hasEventPipe = false;
 
@@ -318,7 +320,7 @@ namespace Micronetes.Hosting
             {
                 // Metrics
                 new EventPipeProvider(
-                    "System.Runtime",
+                    SystemRuntimeEventSourceName,
                     EventLevel.Informational,
                     (long)ClrTraceEventParser.Keywords.None,
                     new Dictionary<string, string>() {
@@ -326,7 +328,7 @@ namespace Micronetes.Hosting
                     }
                 ),
                 new EventPipeProvider(
-                    "Microsoft.AspNetCore.Hosting",
+                    MicrosoftAspNetCoreHostingEventSourceName,
                     EventLevel.Informational,
                     (long)ClrTraceEventParser.Keywords.None,
                     new Dictionary<string, string>() {
