@@ -4,7 +4,6 @@ using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Infrastructure;
@@ -381,18 +380,10 @@ namespace Micronetes.Hosting
                     {
                         if (obj.EventName.Equals("EventCounters"))
                         {
-                            IDictionary<string, object> payloadVal = (IDictionary<string, object>)(obj.PayloadValue(0));
-                            IDictionary<string, object> eventPayload = (IDictionary<string, object>)(payloadVal["Payload"]);
+                            var payloadVal = (IDictionary<string, object>)obj.PayloadValue(0);
+                            var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
 
-                            ICounterPayload payload;
-                            if (eventPayload.ContainsKey("CounterType"))
-                            {
-                                payload = eventPayload["CounterType"].Equals("Sum") ? (ICounterPayload)new IncrementingCounterPayload(eventPayload) : (ICounterPayload)new CounterPayload(eventPayload);
-                            }
-                            else
-                            {
-                                payload = eventPayload.Count == 6 ? (ICounterPayload)new IncrementingCounterPayload(eventPayload) : (ICounterPayload)new CounterPayload(eventPayload);
-                            }
+                            ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
 
                             replica.Metrics[payload.Name] = payload.Value;
                         }
