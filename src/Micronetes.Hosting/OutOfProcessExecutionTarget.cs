@@ -81,13 +81,13 @@ namespace Micronetes.Hosting
                 workingDirectory = serviceDescription.WorkingDirectory != null ?
                     Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.WorkingDirectory)) :
                     Path.GetDirectoryName(path);
+            }
 
-                // If this is a dll then use dotnet to run it
-                if (Path.GetExtension(path) == ".dll")
-                {
-                    args = $"\"{path}\" {args}".Trim();
-                    path = "dotnet";
-                }
+            // If this is a dll then use dotnet to run it
+            if (Path.GetExtension(path) == ".dll")
+            {
+                args = $"\"{path}\" {args}".Trim();
+                path = "dotnet";
             }
 
             service.Status["executablePath"] = path;
@@ -147,7 +147,7 @@ namespace Micronetes.Hosting
 
                     service.Status["restarts"] = restarts;
 
-                    _logger.LogInformation("Launching service {ServiceName} from {ExePath} {args}", replica, path, args);
+                    _logger.LogInformation("Launching service {ServiceName}: {ExePath} {args}", replica, path, args);
 
                     var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
 
@@ -283,8 +283,27 @@ namespace Micronetes.Hosting
         private static string GetExePath(string projectFilePath)
         {
             // TODO: Use msbuild to get the target path
+
             var outputFileName = Path.GetFileNameWithoutExtension(projectFilePath) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
-            return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
+
+            var debugOutputPath = Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug");
+
+            var tfms = Directory.Exists(debugOutputPath) ? Directory.GetDirectories(debugOutputPath) : Array.Empty<string>();
+
+            if (tfms.Length > 0)
+            {
+                // Pick the first one
+                var path = Path.Combine(debugOutputPath, tfms[0], outputFileName);
+                if (File.Exists(path))
+                {
+                    return path;
+                }
+
+                // Older versions of .NET Core didn't have TFMs
+                return Path.Combine(debugOutputPath, tfms[0], Path.GetFileNameWithoutExtension(projectFilePath) + ".dll");
+            }
+
+            return Path.Combine(debugOutputPath, "netcoreapp3.1", outputFileName);
         }
 
         private void ProcessEvents(ILoggerFactory loggerFactory, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
