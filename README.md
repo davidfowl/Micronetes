@@ -22,7 +22,7 @@ set them up so that they can talk.
 
 This project is broken into 2 loosely coupled components:
 - **The Micronetes CLI** - This is the orchestrator used for development and testing.
-- **The Micronetes SDK** - This adds a layer on top of the naming conventions introduced by the orchestor.
+- **The Micronetes SDK** - This adds a layer on top of the naming conventions introduced by the orchestrator.
 
 ## Micronetes CLI
 
@@ -154,7 +154,7 @@ service:myweb:management:port=3000
 service:myweb:management:protocol=http
 ```
 
-The "default" binding can be accesed by the name of the service. To access other addresses, the full name must be accessed:
+The "default" binding can be accessed by the name of the service. To access other addresses, the full name must be accessed:
 
 e.g.
 
