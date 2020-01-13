@@ -138,24 +138,42 @@ namespace Micronetes.Host
                 throw new InvalidOperationException($"{manifestPath} does not exist");
             }
 
-            var app = Application.FromYaml(manifestPath);
-            return app;
+            switch (Path.GetExtension(manifestPath).ToLower())
+            {
+                case ".yaml":
+                case ".yml":
+                    return Application.FromYaml(manifestPath);
+                case ".csproj":
+                case ".fsproj":
+                    return Application.FromProject(manifestPath);
+                case ".sln":
+                    return Application.FromSolution(manifestPath);
+                default:
+                    throw new NotSupportedException($"{manifestPath} not supported");
+            }
         }
 
         private static string ResolveManifestFromDirectory(string basePath)
         {
-            var files = Directory.GetFiles(basePath, "*.yaml");
-            if (files.Length == 0)
+            var formats = new[] { "*.yaml", "*.yml", "*.csproj", "*.fsproj", "*.sln" };
+
+            foreach (var format in formats)
             {
-                throw new InvalidOperationException($"No manifest found");
+                var files = Directory.GetFiles(basePath, format);
+                if (files.Length == 0)
+                {
+                    continue;
+                }
+
+                if (files.Length > 1)
+                {
+                    throw new InvalidOperationException($"Ambiguous match found {string.Join(", ", files.Select(Path.GetFileName))}");
+                }
+
+                return files[0];
             }
 
-            if (files.Length > 1)
-            {
-                throw new InvalidOperationException($"Ambiguous match found {string.Join(", ", files.Select(Path.GetFileName))}");
-            }
-
-            return files[0];
+            throw new InvalidOperationException($"No manifest found");
         }
 
         private static void HandleException(Exception exception, InvocationContext context)

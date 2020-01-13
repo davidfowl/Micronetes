@@ -47,34 +47,28 @@ namespace Micronetes.Hosting.Model
                 }
 
                 // Try to populate more from launch settings
-                var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(contextDirectory, d.Project)));
-                var launchSettingsPath = Path.Combine(projectDirectory, "Properties", "launchSettings.json");
+                var projectFilePath = Path.GetFullPath(Path.Combine(contextDirectory, d.Project));
 
-                if (File.Exists(launchSettingsPath))
+                if (!TryGetLaunchSettings(projectFilePath, out var projectSettings))
                 {
-                    // If there's a launchSettings.json, then use it to get addresses
-                    var root = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(launchSettingsPath));
-                    var key = Path.GetFileNameWithoutExtension(d.Project);
-                    var profiles = root.GetProperty("profiles");
-                    if (profiles.TryGetProperty(key, out var projectSettings))
-                    {
-                        // Only do this if there are no bindings
-                        //if (d.Bindings.Count == 0)
-                        //{
-                        //    var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
-
-                        //    foreach (var address in addresses)
-                        //    {
-                        //        d.Bindings.Add(new ServiceBinding
-                        //        {
-                        //            Name = "default",
-                        //            ConnectionString = address,
-                        //            Protocol = "http"
-                        //        });
-                        //    }
-                        //}
-                    }
+                    continue;
                 }
+
+                // Only do this if there are no bindings
+                //if (d.Bindings.Count == 0)
+                //{
+                //    var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
+
+                //    foreach (var address in addresses)
+                //    {
+                //        d.Bindings.Add(new ServiceBinding
+                //        {
+                //            Name = "default",
+                //            ConnectionString = address,
+                //            Protocol = "http"
+                //        });
+                //    }
+                //}
             }
 
             return new Application(descriptions)
@@ -88,7 +82,34 @@ namespace Micronetes.Hosting.Model
         {
             var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
 
-            return new Application(new ServiceDescription[0])
+            var projectDescription = new ServiceDescription
+            {
+                Name = Path.GetFileNameWithoutExtension(fullPath).ToLower(),
+                Project = fullPath
+            };
+
+            if (TryGetLaunchSettings(fullPath, out var projectSettings))
+            {
+                var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
+
+                foreach (var address in addresses)
+                {
+                    var uri = new Uri(address);
+
+                    projectDescription.Bindings.Add(new ServiceBinding
+                    {
+                        Port = uri.Port,
+                        Protocol = uri.Scheme
+                    });
+                }
+
+                foreach (var envVar in projectSettings.GetProperty("environmentVariables").EnumerateObject())
+                {
+                    projectDescription.Configuration[envVar.Name] = envVar.Value.GetString();
+                }
+            }
+
+            return new Application(new ServiceDescription[] { projectDescription })
             {
                 ContextDirectory = Path.GetDirectoryName(fullPath)
             };
@@ -166,6 +187,24 @@ namespace Micronetes.Hosting.Model
                     SetBinding(s.Description.Name.ToUpper(), b);
                 }
             }
+        }
+
+        private static bool TryGetLaunchSettings(string projectFilePath, out JsonElement projectSettings)
+        {
+            var projectDirectory = Path.GetDirectoryName(projectFilePath);
+            var launchSettingsPath = Path.Combine(projectDirectory, "Properties", "launchSettings.json");
+
+            if (!File.Exists(launchSettingsPath))
+            {
+                projectSettings = default;
+                return false;
+            }
+
+            // If there's a launchSettings.json, then use it to get addresses
+            var root = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(launchSettingsPath));
+            var key = Path.GetFileNameWithoutExtension(projectFilePath);
+            var profiles = root.GetProperty("profiles");
+            return profiles.TryGetProperty(key, out projectSettings);
         }
     }
 }
