@@ -4,20 +4,28 @@ using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Infrastructure;
+using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Metrics;
 using Micronetes.Hosting.Model;
 using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.EventSource;
+using Microsoft.Hosting.Logging;
 
 namespace Micronetes.Hosting
 {
     public class OutOfProcessExecutionTarget : IExecutionTarget
     {
+        private static readonly string MicrosoftExtensionsLoggingProviderName = "Microsoft-Extensions-Logging";
+        private static readonly string SystemRuntimeEventSourceName = "System.Runtime";
+        private static readonly string MicrosoftAspNetCoreHostingEventSourceName = "Microsoft.AspNetCore.Hosting";
+
         private readonly ILogger _logger;
         private readonly bool _debugMode;
 
@@ -138,7 +146,7 @@ namespace Micronetes.Hosting
 
                     var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
 
-                    var metricsThread = new Thread(state => CollectMetrics((int)state, replica, status, metricsTokenSource.Token));
+                    var eventPipeThread = new Thread(state => ProcessEvents(application.LoggerFactory, service.Description.Name, (int)state, replica, status, metricsTokenSource.Token));
 
                     try
                     {
@@ -167,7 +175,7 @@ namespace Micronetes.Hosting
 
                                 status["pid"] = pid;
 
-                                metricsThread.Start(pid);
+                                eventPipeThread.Start(pid);
                             },
                             throwOnError: false,
                             cancellationToken: processInfo.StoppedTokenSource.Token);
@@ -178,7 +186,7 @@ namespace Micronetes.Hosting
                         {
                             metricsTokenSource.Cancel();
 
-                            metricsThread.Join();
+                            eventPipeThread.Join();
                         }
                     }
                     catch (Exception ex)
@@ -274,7 +282,7 @@ namespace Micronetes.Hosting
             return Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug", "netcoreapp3.1", outputFileName);
         }
 
-        private void CollectMetrics(int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
+        private void ProcessEvents(ILoggerFactory loggerFactory, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
         {
             var hasEventPipe = false;
 
@@ -302,28 +310,42 @@ namespace Micronetes.Hosting
 
             _logger.LogInformation("Listening for event pipe events for {ServiceName} on process id {PID}", replicaName, processId);
 
+            var scopeState = new Dictionary<string, object>
+            {
+                { "Application", serviceName },
+                { "Instance", replicaName }
+            };
+
+            var providers = new List<EventPipeProvider>()
+            {
+                // Metrics
+                new EventPipeProvider(
+                    SystemRuntimeEventSourceName,
+                    EventLevel.Informational,
+                    (long)ClrTraceEventParser.Keywords.None,
+                    new Dictionary<string, string>() {
+                        { "EventCounterIntervalSec", "1" }
+                    }
+                ),
+                new EventPipeProvider(
+                    MicrosoftAspNetCoreHostingEventSourceName,
+                    EventLevel.Informational,
+                    (long)ClrTraceEventParser.Keywords.None,
+                    new Dictionary<string, string>() {
+                        { "EventCounterIntervalSec", "1" }
+                    }
+                ),
+
+                // Logging
+                new EventPipeProvider(
+                    MicrosoftExtensionsLoggingProviderName,
+                    EventLevel.LogAlways,
+                    (long)(LoggingEventSource.Keywords.JsonMessage | LoggingEventSource.Keywords.FormattedMessage)
+                )
+            };
+
             while (!cancellationToken.IsCancellationRequested)
             {
-                var providers = new List<EventPipeProvider>()
-                {
-                    new EventPipeProvider(
-                        "System.Runtime",
-                        EventLevel.Informational,
-                        (long)ClrTraceEventParser.Keywords.None,
-                        new Dictionary<string, string>() {
-                            { "EventCounterIntervalSec", "1" }
-                        }
-                    ),
-                    new EventPipeProvider(
-                        "Microsoft.AspNetCore.Hosting",
-                        EventLevel.Informational,
-                        (long)ClrTraceEventParser.Keywords.None,
-                        new Dictionary<string, string>() {
-                            { "EventCounterIntervalSec", "1" }
-                        }
-                    )
-                };
-
                 EventPipeSession session = null;
                 var client = new DiagnosticsClient(processId);
 
@@ -376,11 +398,12 @@ namespace Micronetes.Hosting
                 {
                     var source = new EventPipeEventSource(session.EventStream);
 
-                    source.Dynamic.All += (TraceEvent obj) =>
+                    // Metrics
+                    source.Dynamic.All += traceEvent =>
                     {
-                        if (obj.EventName.Equals("EventCounters"))
+                        if (traceEvent.EventName.Equals("EventCounters"))
                         {
-                            var payloadVal = (IDictionary<string, object>)obj.PayloadValue(0);
+                            var payloadVal = (IDictionary<string, object>)traceEvent.PayloadValue(0);
                             var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
 
                             ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
@@ -388,6 +411,94 @@ namespace Micronetes.Hosting
                             replica.Metrics[payload.Name] = payload.Value;
                         }
                     };
+
+                    // Logging
+                    string lastFormattedMessage = "";
+
+                    // TODO: Handle scopes
+
+                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "MessageJson", (traceEvent) =>
+                    {
+                        // Level, FactoryID, LoggerName, EventID, EventName, ExceptionJson, ArgumentsJson
+                        var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
+                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+                        var eventId = (int)traceEvent.PayloadByName("EventId");
+                        var eventName = (string)traceEvent.PayloadByName("EventName");
+                        var exceptionJson = (string)traceEvent.PayloadByName("ExceptionJson");
+                        var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
+
+                        // There's a bug that causes some of the columns to get mixed up
+                        if (eventName.StartsWith("{"))
+                        {
+                            argsJson = exceptionJson;
+                            exceptionJson = eventName;
+                            eventName = null;
+                        }
+
+                        if (string.IsNullOrEmpty(argsJson))
+                        {
+                            return;
+                        }
+
+                        Exception exception = null;
+                        
+                        var logger = loggerFactory.CreateLogger(categoryName);
+
+                        using var scope = logger.BeginScope(scopeState);
+
+                        try
+                        {
+                            if (exceptionJson != "{}")
+                            {
+                                var exceptionMessage = JsonSerializer.Deserialize<JsonElement>(exceptionJson);
+                                exception = new LoggerException(exceptionMessage);
+                            }
+
+                            var message = JsonSerializer.Deserialize<JsonElement>(argsJson);
+                            if (message.TryGetProperty("{OriginalFormat}", out var formatElement))
+                            {
+                                var formatString = formatElement.GetString();
+                                var formatter = new LogValuesFormatter(formatString);
+                                object[] args = new object[formatter.ValueNames.Count];
+                                for (int i = 0; i < args.Length; i++)
+                                {
+                                    args[i] = message.GetProperty(formatter.ValueNames[i]).GetString();
+                                }
+
+                                logger.Log(logLevel, new EventId(eventId, eventName), exception, formatString, args);
+                            }
+                            else
+                            {
+                                var obj = new LogObject(message, lastFormattedMessage);
+                                logger.Log(logLevel, new EventId(eventId, eventName), obj, exception, LogObject.Callback);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Error processing log entry for {ServiceName}", replicaName);
+                        }
+                    });
+
+                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "FormattedMessage", (traceEvent) =>
+                    {
+                        // Level, FactoryID, LoggerName, EventID, EventName, FormattedMessage
+                        var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
+                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+                        var eventId = (int)traceEvent.PayloadByName("EventId");
+                        var eventName = (string)traceEvent.PayloadByName("EventName");
+                        var formattedMessage = (string)traceEvent.PayloadByName("FormattedMessage");
+
+                        if (string.IsNullOrEmpty(formattedMessage))
+                        {
+                            formattedMessage = eventName;
+                            eventName = "";
+                        }
+
+                        lastFormattedMessage = formattedMessage;
+                    });
+
 
                     source.Process();
                 }

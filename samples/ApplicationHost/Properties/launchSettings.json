@@ -3,7 +3,6 @@
     "ApplicationHost": {
       "commandName": "Project",
       "commandLineArgs": "--port 3745",
-      "launchBrowser": true,
       "launchUrl": "http://127.0.0.1:3745/api/v1/services"
     }
   }

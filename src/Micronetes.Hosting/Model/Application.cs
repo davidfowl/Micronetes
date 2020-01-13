@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -104,6 +105,8 @@ namespace Micronetes.Hosting.Model
         }
 
         public Dictionary<string, Service> Services { get; }
+
+        internal ILoggerFactory LoggerFactory { get; set; }
 
         internal void PopulateEnvironment(Service service, Action<string, string> set)
         {
