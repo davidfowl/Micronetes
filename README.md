@@ -22,7 +22,18 @@ This project is broken into 2 loosely coupled components:
 
 ## Micronetes CLI
 
-The Micronetes CLI is an orchestrator that coordinates multiple applications running both locally and remotely to make developing easier. The core model is an application which is made up of several services. Here's an example of a small distributed application:
+The Micronetes CLI is an orchestrator that coordinates multiple applications running both locally and remotely to make developing easier. Micronetes natively understands .NET Core projects so by default, no extra manifests files are needed. The CLI will use the project's launch settings to know how to run. More advanced scenarios require a manifest that instructs the micronetes CLI what projects to launch.
+
+```
+/api
+/worker
+/library
+app.sln
+```
+
+**micronetes run** will run *all* projects that have a `Properties\launchSettings.json`.
+
+The core model is an application which is made up of several services. Here's an example of a small distributed application:
 
 **app.yaml**
 
