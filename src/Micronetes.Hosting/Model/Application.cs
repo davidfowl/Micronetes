@@ -90,22 +90,33 @@ namespace Micronetes.Hosting.Model
 
             if (TryGetLaunchSettings(fullPath, out var projectSettings))
             {
-                var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
-
-                foreach (var address in addresses)
+                if (projectSettings.TryGetProperty("applicationUrl", out var applicationUrls))
                 {
-                    var uri = new Uri(address);
+                    var addresses = applicationUrls.GetString()?.Split(';');
 
-                    projectDescription.Bindings.Add(new ServiceBinding
+                    foreach (var address in addresses)
                     {
-                        Port = uri.Port,
-                        Protocol = uri.Scheme
-                    });
+                        var uri = new Uri(address);
+
+                        projectDescription.Bindings.Add(new ServiceBinding
+                        {
+                            Port = uri.Port,
+                            Protocol = uri.Scheme
+                        });
+                    }
                 }
 
-                foreach (var envVar in projectSettings.GetProperty("environmentVariables").EnumerateObject())
+                if (projectSettings.TryGetProperty("environmentVariables", out var environmentVariables))
                 {
-                    projectDescription.Configuration[envVar.Name] = envVar.Value.GetString();
+                    foreach (var envVar in environmentVariables.EnumerateObject())
+                    {
+                        projectDescription.Configuration[envVar.Name] = envVar.Value.GetString();
+                    }
+                }
+
+                if (projectSettings.TryGetProperty("replicas", out var replicasElement))
+                {
+                    projectDescription.Replicas = replicasElement.GetInt32();
                 }
             }
 
