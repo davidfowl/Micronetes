@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Microsoft.Build.Construction;
 using Microsoft.Extensions.Logging;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -13,7 +14,7 @@ namespace Micronetes.Hosting.Model
     {
         public string ContextDirectory { get; set; } = Directory.GetCurrentDirectory();
 
-        public Application(ServiceDescription[] services)
+        public Application(IEnumerable<ServiceDescription> services)
         {
             var map = new Dictionary<string, Service>();
 
@@ -82,55 +83,93 @@ namespace Micronetes.Hosting.Model
         {
             var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
 
+            var projectDescription = CreateDescriptionFromProject(fullPath);
+
+            return new Application(projectDescription == null ? new ServiceDescription[0] : new ServiceDescription[] { projectDescription })
+            {
+                ContextDirectory = Path.GetDirectoryName(fullPath)
+            };
+        }
+
+        private static ServiceDescription CreateDescriptionFromProject(string fullPath)
+        {
+            if (!TryGetLaunchSettings(fullPath, out var projectSettings))
+            {
+                return null;
+            }
+
             var projectDescription = new ServiceDescription
             {
                 Name = Path.GetFileNameWithoutExtension(fullPath).ToLower(),
                 Project = fullPath
             };
 
-            if (TryGetLaunchSettings(fullPath, out var projectSettings))
+            if (projectSettings.TryGetProperty("applicationUrl", out var applicationUrls))
             {
-                if (projectSettings.TryGetProperty("applicationUrl", out var applicationUrls))
-                {
-                    var addresses = applicationUrls.GetString()?.Split(';');
+                var addresses = applicationUrls.GetString()?.Split(';');
 
-                    foreach (var address in addresses)
+                foreach (var address in addresses)
+                {
+                    var uri = new Uri(address);
+
+                    projectDescription.Bindings.Add(new ServiceBinding
                     {
-                        var uri = new Uri(address);
-
-                        projectDescription.Bindings.Add(new ServiceBinding
-                        {
-                            Port = uri.Port,
-                            Protocol = uri.Scheme
-                        });
-                    }
-                }
-
-                if (projectSettings.TryGetProperty("environmentVariables", out var environmentVariables))
-                {
-                    foreach (var envVar in environmentVariables.EnumerateObject())
-                    {
-                        projectDescription.Configuration[envVar.Name] = envVar.Value.GetString();
-                    }
-                }
-
-                if (projectSettings.TryGetProperty("replicas", out var replicasElement))
-                {
-                    projectDescription.Replicas = replicasElement.GetInt32();
+                        Port = uri.Port,
+                        Protocol = uri.Scheme
+                    });
                 }
             }
 
-            return new Application(new ServiceDescription[] { projectDescription })
+            if (projectSettings.TryGetProperty("environmentVariables", out var environmentVariables))
             {
-                ContextDirectory = Path.GetDirectoryName(fullPath)
-            };
+                foreach (var envVar in environmentVariables.EnumerateObject())
+                {
+                    projectDescription.Configuration[envVar.Name] = envVar.Value.GetString();
+                }
+            }
+
+            if (projectSettings.TryGetProperty("replicas", out var replicasElement))
+            {
+                projectDescription.Replicas = replicasElement.GetInt32();
+            }
+
+            return projectDescription;
         }
 
         public static Application FromSolution(string path)
         {
             var fullPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), path));
 
-            return new Application(new ServiceDescription[0])
+            var solution = SolutionFile.Parse(fullPath);
+
+            var descriptions = new List<ServiceDescription>();
+
+            foreach (var project in solution.ProjectsInOrder)
+            {
+                if (project.ProjectType != SolutionProjectType.KnownToBeMSBuildFormat)
+                {
+                    continue;
+                }
+
+                var extension = Path.GetExtension(project.AbsolutePath).ToLower();
+                switch (extension)
+                {
+                    case ".csproj":
+                    case ".fsproj":
+                        break;
+                    default:
+                        continue;
+                }
+
+                var description = CreateDescriptionFromProject(project.AbsolutePath);
+
+                if (description != null)
+                {
+                    descriptions.Add(description);
+                }
+            }
+
+            return new Application(descriptions)
             {
                 ContextDirectory = Path.GetDirectoryName(fullPath)
             };
