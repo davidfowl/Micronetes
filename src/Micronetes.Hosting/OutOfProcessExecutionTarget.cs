@@ -129,7 +129,7 @@ namespace Micronetes.Hosting
 
                     if (hasPorts)
                     {
-                        status["ports"] = ports;
+                        status["ports"] = ports.Select(p => p.Port);
                     }
 
                     service.Status["restarts"] = restarts;
