@@ -1,8 +1,6 @@
 # Micronetes
 
-[![feedz.io](https://img.shields.io/badge/endpoint.svg?url=https%3A%2F%2Ff.feedz.io%2Fdavidfowl%2Fmicronetes%2Fshield%2Fm8s%2Flatest&label=m8s)](https://f.feedz.io/davidfowl/micronetes/packages/m8s/latest/download)
-
-[![feedz.io](https://img.shields.io/badge/endpoint.svg?url=https%3A%2F%2Ff.feedz.io%2Fdavidfowl%2Fmicronetes%2Fshield%2FMicronetes%2Flatest&label=Micronetes)](https://f.feedz.io/davidfowl/micronetes/packages/Micronetes/latest/download)
+[![feedz.io](https://img.shields.io/badge/endpoint.svg?url=https%3A%2F%2Ff.feedz.io%2Fdavidfowl%2Fmicronetes%2Fshield%2Fm8s%2Flatest)](https://f.feedz.io/davidfowl/micronetes/packages/m8s/latest/download)
 
 Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed applications easier.
 
