@@ -2,7 +2,7 @@
   "profiles": {
     "ApplicationHost": {
       "commandName": "Project",
-      "commandLineArgs": "--port 3745 --appinsights=a0b96859-7b2e-4366-a8c9-ed2c",
+      "commandLineArgs": "--port 3745",
       "launchUrl": "http://127.0.0.1:3745/api/v1/services"
     }
   }
