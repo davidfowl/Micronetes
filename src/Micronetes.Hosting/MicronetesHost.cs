@@ -347,8 +347,6 @@ namespace Micronetes.Hosting
                                             .MinimumLevel.Verbose()
                                             .Enrich.FromLogContext();
 
-                loggerConfiguration.WriteTo.Console();
-
                 var elasticSearch = configuration["elastic"];
 
                 if (!string.IsNullOrEmpty(elasticSearch))
