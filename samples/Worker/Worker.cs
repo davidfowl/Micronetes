@@ -37,7 +37,8 @@ namespace Worker
                 var consumer = new EventingBasicConsumer(queue);
                 consumer.Received += (model, ea) =>
                 {
-                    _logger.LogInformation("Dequeued " + Encoding.UTF8.GetString(ea.Body));
+                    // Use the raw log API to avoid formatting the JSON string (since it has {})
+                    _logger.Log(LogLevel.Information, 0, "Dequeued " + Encoding.UTF8.GetString(ea.Body), exception: null, formatter: (m, e) => m);
                 };
 
                 queue.BasicConsume(queue: "orders",

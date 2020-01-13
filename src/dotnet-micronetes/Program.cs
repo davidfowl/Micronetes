@@ -86,14 +86,28 @@ namespace Micronetes.Host
 
             command.AddOption(new Option("--port")
             {
-                Description = "Port to run the run control plane on",
+                Description = "The port to run the run control plane on.",
                 Argument = new Argument<int>("port"),
                 Required = false
             });
-            
+
+            command.AddOption(new Option("--elastic")
+            {
+                Description = "Elasticsearch URL. Write structured application logs to Elasticsearch.",
+                Argument = new Argument<string>("elastic"),
+                Required = false
+            });
+
+            command.AddOption(new Option("--appinsights")
+            {
+                Description = "ApplicationInsights instrumentation key. Write structured application logs to ApplicationInsights.",
+                Argument = new Argument<string>("instrumenation-key"),
+                Required = false
+            });
 
             command.AddOption(new Option("--debug")
             {
+                Description = "Wait for debugger attach in all services.",
                 Required = false
             });
 

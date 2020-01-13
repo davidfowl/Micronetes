@@ -6,8 +6,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Trace.Configuration;
 using RabbitMQ.Client;
-using Serilog;
-using Serilog.Events;
 using StackExchange.Redis;
 
 namespace Micronetes
@@ -16,22 +14,7 @@ namespace Micronetes
     {
         public static IHostBuilder UseMicronetes(this IHostBuilder builder)
         {
-            return builder.ConfigureServices(services => services.AddMicronetes())
-                          .UseSerilog((context, config) =>
-                          {
-                              config.MinimumLevel.Debug()
-                              .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-                              .Enrich.FromLogContext()
-                              .Enrich.WithProperty("Application", context.HostingEnvironment.ApplicationName)
-                              .Enrich.WithProperty("Instance", context.Configuration["APP_INSTANCE"])
-                              .WriteTo.Console();
-
-                              var elasticSearchUrl = context.Configuration.GetUrl("elk:elastic") ?? context.Configuration.GetUrl("elastic");
-                              if (!string.IsNullOrEmpty(elasticSearchUrl))
-                              {
-                                  config.WriteTo.Elasticsearch(elasticSearchUrl);
-                              }
-                          });
+            return builder.ConfigureServices(services => services.AddMicronetes());
         }
 
         private static IServiceCollection AddMicronetes(this IServiceCollection services)

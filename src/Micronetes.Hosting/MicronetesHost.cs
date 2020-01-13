@@ -42,6 +42,7 @@ namespace Micronetes.Hosting
             using var host = Host.CreateDefaultBuilder(args)
                 .UseSerilog((context, configuration) =>
                 {
+                    // Logging for this application
                     configuration
                         .MinimumLevel.Verbose()
                         .Filter.ByExcluding(Matching.FromSource("Microsoft"))
@@ -337,6 +338,36 @@ namespace Micronetes.Hosting
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
             var target = new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
+
+            // This is the logger factory for application logs. It allows re-routing event pipe collected logs (structured logs)
+            // to any of the supported sinks, currently (elastic search and app insights)
+            application.LoggerFactory = LoggerFactory.Create(builder =>
+            {
+                var loggerConfiguration = new LoggerConfiguration()
+                                            .MinimumLevel.Verbose()
+                                            .Enrich.FromLogContext();
+
+                loggerConfiguration.WriteTo.Console();
+
+                var elasticSearch = configuration["elastic"];
+
+                if (!string.IsNullOrEmpty(elasticSearch))
+                {
+                    logger.LogInformation("Using ElasticSearch at {URL}", elasticSearch);
+                    loggerConfiguration.WriteTo.Elasticsearch(elasticSearch);
+                }
+
+                builder.AddSerilog(loggerConfiguration.CreateLogger());
+
+                var instrumentationKey = configuration["appinsights"];
+
+                if (!string.IsNullOrEmpty(instrumentationKey))
+                {
+                    logger.LogInformation("Using ApplicationInsights instrumentation key {InstrumentationKey}", instrumentationKey);
+                    builder.AddApplicationInsights(instrumentationKey);
+                }
+            });
+
 
             await host.StartAsync();
 
