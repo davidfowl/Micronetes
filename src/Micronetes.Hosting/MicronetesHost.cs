@@ -271,7 +271,7 @@ namespace Micronetes.Hosting
                                 var sb = new StringBuilder();
                                 foreach (var s in application.Services.OrderBy(s => s.Key))
                                 {
-                                    sb.AppendLine($"# {s.Key} service");
+                                    sb.AppendLine($"# {s.Key}");
                                     foreach (var replica in s.Value.Replicas)
                                     {
                                         foreach (var metric in replica.Value.Metrics)
