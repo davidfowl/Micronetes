@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Infrastructure;
+using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Metrics;
 using Micronetes.Hosting.Model;
 using Microsoft.Diagnostics.NETCore.Client;
@@ -15,11 +16,11 @@ using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventSource;
-using Microsoft.Hosting.Logs;
+using Microsoft.Hosting.Logging;
 
 namespace Micronetes.Hosting
 {
-    public class OutOfProcessExecutionTarget : IExecutionTarget
+    public partial class OutOfProcessExecutionTarget : IExecutionTarget
     {
         private static readonly string MicrosoftExtensionsLoggingProviderName = "Microsoft-Extensions-Logging";
 
@@ -413,7 +414,6 @@ namespace Micronetes.Hosting
                     string lastFormattedMessage = "";
 
                     // TODO: Handle scopes
-                    // TODO: Handle exceptions
 
                     source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "MessageJson", (traceEvent) =>
                     {
@@ -440,18 +440,19 @@ namespace Micronetes.Hosting
                         }
 
                         Exception exception = null;
-                        if (exceptionJson != "{}")
-                        {
-                            var exceptionMessage = JsonSerializer.Deserialize<JsonElement>(exceptionJson);
-                            exception = new RemoteException(exceptionMessage);
-                        }
-
+                        
                         var logger = loggerFactory.CreateLogger(categoryName);
 
                         using var scope = logger.BeginScope(scopeState);
 
                         try
                         {
+                            if (exceptionJson != "{}")
+                            {
+                                var exceptionMessage = JsonSerializer.Deserialize<JsonElement>(exceptionJson);
+                                exception = new LoggerException(exceptionMessage);
+                            }
+
                             var message = JsonSerializer.Deserialize<JsonElement>(argsJson);
                             if (message.TryGetProperty("{OriginalFormat}", out var formatElement))
                             {
@@ -514,27 +515,6 @@ namespace Micronetes.Hosting
             }
 
             _logger.LogInformation("Event pipe collection completed for {ServiceName} on process id {PID}", replicaName, processId);
-        }
-
-        private class RemoteException : Exception
-        {
-            private readonly JsonElement _exceptionMessage;
-
-            public RemoteException(JsonElement exceptionMessage)
-            {
-                _exceptionMessage = exceptionMessage;
-                Message = exceptionMessage.GetProperty("Message").GetString();
-                StackTrace = ToString();
-            }
-
-            public override string Message { get; }
-
-            public override string StackTrace { get; }
-
-            public override string ToString()
-            {
-                return _exceptionMessage.GetProperty("VerboseMessage").GetString();
-            }
         }
 
         private class ProcessInfo

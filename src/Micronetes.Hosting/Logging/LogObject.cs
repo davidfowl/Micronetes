@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace Microsoft.Hosting.Logs
+namespace Microsoft.Hosting.Logging
 {
     internal class LogObject : IReadOnlyList<KeyValuePair<string, object>>
     {
