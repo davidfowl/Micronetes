@@ -31,7 +31,7 @@ The Micronetes CLI is an orchestrator that coordinates multiple applications run
 app.sln
 ```
 
-**micronetes run** will run *all* projects that have a `Properties\launchSettings.json`.
+**m8s run** will run *all* projects that have a `Properties\launchSettings.json`.
 
 The core model is an application which is made up of several services. Here's an example of a small distributed application:
 
@@ -52,12 +52,12 @@ The core model is an application which is made up of several services. Here's an
     - port: 5672
 ```
 
-**micronetes run app.yaml** will run launch 2 instances of the Web and 3 of Worker and will `docker run` the rabbitmq image. There's a built-in proxy that will load balance the traffic in a round-robin matter between replicas of the various processes. It will also make those services available via environment variables following the convention described later in this section.
+**m8s run app.yaml** will run launch 2 instances of the Web and 3 of Worker and will `docker run` the rabbitmq image. There's a built-in proxy that will load balance the traffic in a round-robin matter between replicas of the various processes. It will also make those services available via environment variables following the convention described later in this section.
 
 There is also a mini control plane built in that can be used to view the state of the services and to view the logs of the various services. As an example:
 
 ```
-> micronetes run app.yaml
+> m8s run app.yaml
 [03:26:23 INF] Mapping external port 5005 to internal port(s) 51016, 51017 for web
 [03:26:23 INF] API server running on http://127.0.0.1:51018
 [03:26:23 INF] Launching service web_65758656-1 from /apps/Web/bin/Debug/netcoreapp3.1/Web
