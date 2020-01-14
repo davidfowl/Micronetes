@@ -123,7 +123,7 @@ Examples:
 
 ```yaml
 - name: myweb
-  projectFile: MyWeb/Web.csproj
+  project: MyWeb/Web.csproj
   bindings:
     - port: 80
     - name: management
@@ -136,7 +136,7 @@ The following binding:
 
 ```yaml
 - name: myweb
-  projectFile: MyWeb/Web.csproj
+  project: MyWeb/Web.csproj
   bindings:
     - port: 80
     - name: management
