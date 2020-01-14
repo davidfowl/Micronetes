@@ -26,19 +26,19 @@ namespace Micronetes
             services.AddOpenTelemetry((sp, builder) =>
             {
                 var config = sp.GetRequiredService<IConfiguration>();
-                var zipkinUrl = config.GetUrl("zipkin");
+                var zipkinUri = config.GetUrl("zipkin");
 
                 var env = sp.GetRequiredService<IHostEnvironment>();
 
                 builder.AddRequestCollector();
                 builder.AddDependencyCollector();
 
-                if (!string.IsNullOrEmpty(zipkinUrl))
+                if (zipkinUri != null)
                 {
                     builder.UseZipkin(o =>
                     {
                         o.ServiceName = env.ApplicationName;
-                        o.Endpoint = new Uri(zipkinUrl + "api/v2/spans");
+                        o.Endpoint = new Uri(zipkinUri, "api/v2/spans");
                     });
                 }
             });

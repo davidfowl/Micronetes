@@ -8,22 +8,22 @@ namespace Micronetes
     public class HttpClientFactory : IClientFactory<HttpClient>
     {
         private readonly ConcurrentDictionary<string, HttpClient> _clients = new ConcurrentDictionary<string, HttpClient>(StringComparer.OrdinalIgnoreCase);
-        private IConfiguration _nameResolver;
+        private IConfiguration _configuration;
 
-        public HttpClientFactory(IConfiguration nameResolver)
+        public HttpClientFactory(IConfiguration configuration)
         {
-            _nameResolver = nameResolver;
+            _configuration = configuration;
         }
 
         public HttpClient CreateClient(string name)
         {
-            var address = _nameResolver.GetUrl(name);
+            var address = _configuration.GetUrl(name);
 
             // TODO: Check the protocol here
 
             return _clients.GetOrAdd(name, k => new HttpClient()
             {
-                BaseAddress = new Uri(address)
+                BaseAddress = address
             });
         }
     }
