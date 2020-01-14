@@ -432,6 +432,7 @@ namespace Micronetes.Hosting
 
                             ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
 
+                            // TODO: Use ProviderName to distinguish counter values
                             replica.Metrics[payload.Name] = payload.Value;
                         }
                     };
