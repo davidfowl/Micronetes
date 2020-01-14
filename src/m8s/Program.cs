@@ -45,26 +45,26 @@ namespace Micronetes.Host
 
         private static Command NewCommand()
         {
-            var command = new Command("new", "create a manifest")
+            var command = new Command("new", "create a yaml manifest")
             {
             };
 
             command.Handler = CommandHandler.Create<IConsole>((console) =>
             {
-                if (File.Exists("app.yaml"))
+                if (File.Exists("m8s.yaml"))
                 {
-                    console.Out.WriteLine("\"app.yaml\" already exists.");
+                    console.Out.WriteLine("\"m8s.yaml\" already exists.");
                     return;
                 }
 
-                File.WriteAllText("app.yaml", @"- name: app
+                File.WriteAllText("m8s.yaml", @"- name: app
   # project: app.csproj # msbuild project path (relative to this file)
   # executable: app.exe # path to an executable (relative to this file)
   # args: --arg1=3 # arguments to pass to the process
   # replicas: 5 # number of times to launch the application
   # env: # environment variables
   # bindings: # optional array of bindings (ports, connection strings)
-    # port: 8080 # number port of the binding
+    # - port: 8080 # number port of the binding
 ");
                 console.Out.WriteLine("Created \"app.yaml\"");
             });
@@ -78,15 +78,15 @@ namespace Micronetes.Host
             {
             };
 
-            var argument = new Argument("manifest")
+            var argument = new Argument("path")
             {
-                Description = "A directory with a manifest or a manifest",
+                Description = "A file or directory to execute. Supports a project files, solution files or a yaml manifest.",
                 Arity = ArgumentArity.ZeroOrOne
             };
 
             command.AddOption(new Option("--port")
             {
-                Description = "The port to run the run control plane on.",
+                Description = "The port to run control plane on.",
                 Argument = new Argument<int>("port"),
                 Required = false
             });
@@ -113,49 +113,49 @@ namespace Micronetes.Host
 
             command.AddArgument(argument);
 
-            command.Handler = CommandHandler.Create<IConsole, string>((console, manifest) =>
+            command.Handler = CommandHandler.Create<IConsole, string>((console, path) =>
             {
-                Application app = ResolveApplication(manifest);
+                Application app = ResolveApplication(path);
                 return MicronetesHost.RunAsync(app, args);
             });
 
             return command;
         }
 
-        private static Application ResolveApplication(string manifestPath)
+        private static Application ResolveApplication(string path)
         {
-            if (string.IsNullOrEmpty(manifestPath))
+            if (string.IsNullOrEmpty(path))
             {
-                manifestPath = ResolveManifestFromDirectory(Directory.GetCurrentDirectory());
+                path = ResolveFileFromDirectory(Directory.GetCurrentDirectory());
             }
-            else if (Directory.Exists(manifestPath))
+            else if (Directory.Exists(path))
             {
-                manifestPath = ResolveManifestFromDirectory(Path.GetFullPath(manifestPath));
-            }
-
-            if (!File.Exists(manifestPath))
-            {
-                throw new InvalidOperationException($"{manifestPath} does not exist");
+                path = ResolveFileFromDirectory(Path.GetFullPath(path));
             }
 
-            switch (Path.GetExtension(manifestPath).ToLower())
+            if (!File.Exists(path))
+            {
+                throw new InvalidOperationException($"{path} does not exist");
+            }
+
+            switch (Path.GetExtension(path).ToLower())
             {
                 case ".yaml":
                 case ".yml":
-                    return Application.FromYaml(manifestPath);
+                    return Application.FromYaml(path);
                 case ".csproj":
                 case ".fsproj":
-                    return Application.FromProject(manifestPath);
+                    return Application.FromProject(path);
                 case ".sln":
-                    return Application.FromSolution(manifestPath);
+                    return Application.FromSolution(path);
                 default:
-                    throw new NotSupportedException($"{manifestPath} not supported");
+                    throw new NotSupportedException($"{path} not supported");
             }
         }
 
-        private static string ResolveManifestFromDirectory(string basePath)
+        private static string ResolveFileFromDirectory(string basePath)
         {
-            var formats = new[] { "*.yaml", "*.yml", "*.csproj", "*.fsproj", "*.sln" };
+            var formats = new[] { "m8s.yaml", "m8s.yml", "*.csproj", "*.fsproj", "*.sln" };
 
             foreach (var format in formats)
             {
@@ -173,7 +173,7 @@ namespace Micronetes.Host
                 return files[0];
             }
 
-            throw new InvalidOperationException($"No manifest found");
+            throw new InvalidOperationException($"None of the supported files were found (m8s.yaml, .csproj, .fsproj, .sln)");
         }
 
         private static void HandleException(Exception exception, InvocationContext context)
