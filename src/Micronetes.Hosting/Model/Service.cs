@@ -47,7 +47,7 @@ namespace Micronetes.Hosting.Model
 
             public override void Write(Utf8JsonWriter writer, ServiceReplica value, JsonSerializerOptions options)
             {
-                JsonSerializer.Serialize(writer, value.ToDictionary(p => p.Key, p => p.Value));
+                JsonSerializer.Serialize(writer, value, typeof(ConcurrentDictionary<string, object>));
             }
         }
     }
