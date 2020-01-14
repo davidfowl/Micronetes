@@ -224,3 +224,5 @@ To install the **m8s** CLI use the following command:
 ```
 dotnet tool install m8s --version {version} -g --add-source https://f.feedz.io/davidfowl/micronetes/nuget/index.json
 ```
+
+Find the list of [versions](https://f.feedz.io/davidfowl/micronetes/nuget/v3/packages/m8s/index.json)
