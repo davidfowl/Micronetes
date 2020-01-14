@@ -143,7 +143,18 @@ The following binding:
       port: 3000
 ```
 
-Will be translated into the following `IConfiguration` keys:
+Will be translated into the following environment variables:
+
+```
+SERVICE_MYWEB_PORT=80
+SERVICE_MYWEB_HOST=localhost
+SERVICE_MYWEB_PROTOCOL=http
+SERVICE_MYWEB_MANAGEMENT_PORT=3000
+SERVICE_MYWEB_MANAGEMENT_HOST=localhost
+SERVICE_MYWEB_MANAGEMENT_PROTOCOL=http
+```
+
+It will also be exposed via specific `IConfiguration` keys:
 
 ```
 service:myweb:port=80
