@@ -55,21 +55,7 @@ namespace Micronetes.Hosting.Model
                     continue;
                 }
 
-                // Only do this if there are no bindings
-                //if (d.Bindings.Count == 0)
-                //{
-                //    var addresses = projectSettings.GetProperty("applicationUrl").GetString()?.Split(';');
-
-                //    foreach (var address in addresses)
-                //    {
-                //        d.Bindings.Add(new ServiceBinding
-                //        {
-                //            Name = "default",
-                //            ConnectionString = address,
-                //            Protocol = "http"
-                //        });
-                //    }
-                //}
+                PopulateFromLaunchSettings(d, projectSettings);
             }
 
             return new Application(descriptions)
@@ -104,7 +90,14 @@ namespace Micronetes.Hosting.Model
                 Project = fullPath
             };
 
-            if (projectSettings.TryGetProperty("applicationUrl", out var applicationUrls))
+            PopulateFromLaunchSettings(projectDescription, projectSettings);
+
+            return projectDescription;
+        }
+
+        private static void PopulateFromLaunchSettings(ServiceDescription projectDescription, JsonElement projectSettings)
+        {
+            if (projectDescription.Bindings.Count == 0 && projectSettings.TryGetProperty("applicationUrl", out var applicationUrls))
             {
                 var addresses = applicationUrls.GetString()?.Split(';');
 
@@ -120,7 +113,7 @@ namespace Micronetes.Hosting.Model
                 }
             }
 
-            if (projectSettings.TryGetProperty("environmentVariables", out var environmentVariables))
+            if (projectDescription.Configuration.Count == 0 && projectSettings.TryGetProperty("environmentVariables", out var environmentVariables))
             {
                 foreach (var envVar in environmentVariables.EnumerateObject())
                 {
@@ -128,12 +121,10 @@ namespace Micronetes.Hosting.Model
                 }
             }
 
-            if (projectSettings.TryGetProperty("replicas", out var replicasElement))
+            if (projectDescription.Replicas == null && projectSettings.TryGetProperty("replicas", out var replicasElement))
             {
                 projectDescription.Replicas = replicasElement.GetInt32();
             }
-
-            return projectDescription;
         }
 
         public static Application FromSolution(string path)
