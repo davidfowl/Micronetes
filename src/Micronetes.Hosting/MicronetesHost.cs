@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.IO.Pipelines;
 using System.Linq;
 using System.Net;
@@ -19,6 +18,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -53,6 +53,21 @@ namespace Micronetes.Hosting
                 })
                 .ConfigureWebHostDefaults(web =>
                 {
+                    web.ConfigureServices(services =>
+                    {
+                        services.AddRazorPages();
+                        services.AddServerSideBlazor();
+
+                        services.AddOptions<StaticFileOptions>()
+                            .PostConfigure(o =>
+                            {
+                                // Make sure we don't remove the other file providers (blazor needs this)
+                                o.FileProvider = new CompositeFileProvider(o.FileProvider, new ManifestEmbeddedFileProvider(typeof(MicronetesHost).Assembly, "wwwroot"));
+                            });
+
+                        services.AddSingleton(application);
+                    });
+
                     web.ConfigureKestrel(options =>
                     {
                         var logger = options.ApplicationServices.GetRequiredService<ILogger<MicronetesHost>>();
@@ -201,11 +216,13 @@ namespace Micronetes.Hosting
                     {
                         app.UseDeveloperExceptionPage();
 
+                        app.UseStaticFiles();
+
                         app.UseRouting();
 
                         app.UseEndpoints(endpoints =>
                         {
-                            endpoints.Map("/", context =>
+                            endpoints.Map("/api/v1", context =>
                             {
                                 context.Response.ContentType = "application/json";
                                 return JsonSerializer.SerializeAsync(context.Response.Body, new[]
@@ -328,6 +345,9 @@ namespace Micronetes.Hosting
 
                                 await context.Response.WriteAsync(sb.ToString());
                             });
+
+                            endpoints.MapBlazorHub();
+                            endpoints.MapFallbackToPage("/_Host");
                         });
                     });
                 })

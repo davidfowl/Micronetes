@@ -1,0 +1,69 @@
+﻿@page "/"
+@inject Application application
+
+<h1>Services</h1>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Bindings</th>
+            <th>Replicas</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var service in application.Services)
+        {
+            <tr>
+                <td>@service.Value.Description.Name</td>
+                <td>
+                    @if (service.Value.Description.Project != null)
+                    {
+                        <p>@service.Value.Description.Project</p>
+                    }
+                    else if (service.Value.Description.DockerImage != null)
+                    {
+                        <p>@service.Value.Description.DockerImage</p>
+                    }
+                </td>
+                <td>
+                    @if (service.Value.Description.Bindings.Any())
+                    {
+                        foreach (var b in service.Value.Description.Bindings)
+                        {
+                            if (b.Port != null)
+                            {
+                                if (b.Protocol == null || b.Protocol == "http" || b.Protocol == "https")
+                                {
+                                    var url = GetUrl(b);
+                                    <span><a href="@url" target="_blank">@url</a></span>
+                                }
+                                else
+                                {
+                                    <span>@GetUrl(b)</span>
+                                }
+                            }
+                            else
+                            {
+                                <span>@b.ConnectionString</span>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <p>none</p>
+                    }
+                </td>
+                <td>@service.Value.Description.Replicas</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    string GetUrl(ServiceBinding b)
+    {
+        return $"{(b.Protocol ?? "http")}://{b.Host ?? "localhost"}:{b.Port}";
+    }
+}
