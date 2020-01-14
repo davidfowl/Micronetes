@@ -277,7 +277,7 @@ namespace Micronetes.Hosting
                                     {
                                         foreach (var metric in replica.Value.Metrics)
                                         {
-                                            sb.Append($"dotnet_{metric.Key.Replace('-', '_')}");
+                                            sb.Append(metric.Key);
                                             sb.Append("{");
                                             sb.Append($"service=\"{s.Key}\",");
                                             sb.Append($"instance=\"{replica.Key}\"");
@@ -316,7 +316,7 @@ namespace Micronetes.Hosting
                                 {
                                     foreach (var metric in replica.Value.Metrics)
                                     {
-                                        sb.Append($"dotnet_{metric.Key.Replace('-', '_')}");
+                                        sb.Append(metric.Key);
                                         sb.Append("{");
                                         sb.Append($"instance=\"{replica.Key}\"");
                                         sb.Append("}");

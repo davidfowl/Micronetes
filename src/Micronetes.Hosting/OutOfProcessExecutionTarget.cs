@@ -25,6 +25,7 @@ namespace Micronetes.Hosting
         private static readonly string MicrosoftExtensionsLoggingProviderName = "Microsoft-Extensions-Logging";
         private static readonly string SystemRuntimeEventSourceName = "System.Runtime";
         private static readonly string MicrosoftAspNetCoreHostingEventSourceName = "Microsoft.AspNetCore.Hosting";
+        private static readonly string GrpcAspNetCoreServer = "Grpc.AspNetCore.Server";
 
         private readonly ILogger _logger;
         private readonly bool _debugMode;
@@ -66,17 +67,21 @@ namespace Micronetes.Hosting
             var path = "";
             var workingDirectory = "";
             var args = service.Description.Args ?? "";
+            var applicationName = "";
 
             if (serviceDescription.Project != null)
             {
                 var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Project));
                 path = GetExePath(fullProjectPath);
                 workingDirectory = Path.GetDirectoryName(fullProjectPath);
+                // TODO: Requires msbuild
+                applicationName = Path.GetFileNameWithoutExtension(fullProjectPath);
 
                 service.Status["projectFilePath"] = fullProjectPath;
             }
             else
             {
+                applicationName = Path.GetFileNameWithoutExtension(serviceDescription.Executable);
                 path = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Executable));
                 workingDirectory = serviceDescription.WorkingDirectory != null ?
                     Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.WorkingDirectory)) :
@@ -86,6 +91,7 @@ namespace Micronetes.Hosting
             // If this is a dll then use dotnet to run it
             if (Path.GetExtension(path) == ".dll")
             {
+                applicationName = Path.GetFileNameWithoutExtension(path);
                 args = $"\"{path}\" {args}".Trim();
                 path = "dotnet";
             }
@@ -151,7 +157,7 @@ namespace Micronetes.Hosting
 
                     var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
 
-                    var eventPipeThread = new Thread(state => ProcessEvents(application.LoggerFactory, service.Description.Name, (int)state, replica, status, metricsTokenSource.Token));
+                    var eventPipeThread = new Thread(state => ProcessEvents(application.LoggerFactory, applicationName, service.Description.Name, (int)state, replica, status, metricsTokenSource.Token));
 
                     try
                     {
@@ -306,7 +312,7 @@ namespace Micronetes.Hosting
             return Path.Combine(debugOutputPath, "netcoreapp3.1", outputFileName);
         }
 
-        private void ProcessEvents(ILoggerFactory loggerFactory, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
+        private void ProcessEvents(ILoggerFactory loggerFactory, string applicationName, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
         {
             var hasEventPipe = false;
 
@@ -342,7 +348,7 @@ namespace Micronetes.Hosting
 
             var providers = new List<EventPipeProvider>()
             {
-                // Metrics
+                // Runtime Metrics
                 new EventPipeProvider(
                     SystemRuntimeEventSourceName,
                     EventLevel.Informational,
@@ -353,6 +359,24 @@ namespace Micronetes.Hosting
                 ),
                 new EventPipeProvider(
                     MicrosoftAspNetCoreHostingEventSourceName,
+                    EventLevel.Informational,
+                    (long)ClrTraceEventParser.Keywords.None,
+                    new Dictionary<string, string>() {
+                        { "EventCounterIntervalSec", "1" }
+                    }
+                ),
+                new EventPipeProvider(
+                    GrpcAspNetCoreServer,
+                    EventLevel.Informational,
+                    (long)ClrTraceEventParser.Keywords.None,
+                    new Dictionary<string, string>() {
+                        { "EventCounterIntervalSec", "1" }
+                    }
+                ),
+                
+                // Application Metrics
+                new EventPipeProvider(
+                    applicationName,
                     EventLevel.Informational,
                     (long)ClrTraceEventParser.Keywords.None,
                     new Dictionary<string, string>() {
@@ -425,15 +449,21 @@ namespace Micronetes.Hosting
                     // Metrics
                     source.Dynamic.All += traceEvent =>
                     {
-                        if (traceEvent.EventName.Equals("EventCounters"))
+                        try
                         {
-                            var payloadVal = (IDictionary<string, object>)traceEvent.PayloadValue(0);
-                            var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
+                            if (traceEvent.EventName.Equals("EventCounters"))
+                            {
+                                var payloadVal = (IDictionary<string, object>)traceEvent.PayloadValue(0);
+                                var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
 
-                            ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
+                                ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
 
-                            // TODO: Use ProviderName to distinguish counter values
-                            replica.Metrics[payload.Name] = payload.Value;
+                                replica.Metrics[traceEvent.ProviderName + "/" + payload.Name] = payload.Value;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error processing counter for {ProviderName}:{EventName}", traceEvent.ProviderName, traceEvent.EventName);
                         }
                     };
 
