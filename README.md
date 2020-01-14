@@ -181,7 +181,7 @@ public interface IClientFactory<TClient>
 ### Client abstractions
 
 - HTTP - `HttpClient`
-- PubSub - `PubSubClient`
+- PubSub - TBD
 - Queue - TBD
 - RPC - TBD
 

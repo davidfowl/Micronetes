@@ -17,7 +17,7 @@ namespace BackEnd.Services
 
         public ValueTask PlaceOrderAsync(Order order)
         {
-            var channel = _clientFactory.CreateClient("Rabbit");
+            var channel = _clientFactory.CreateClient("rabbit");
 
             channel.QueueDeclare(queue: "orders",
                                      durable: false,

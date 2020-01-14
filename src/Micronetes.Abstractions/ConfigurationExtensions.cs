@@ -32,7 +32,6 @@ namespace Microsoft.Extensions.Configuration
             return null;
         }
 
-
         public static string GetProtocol(this IConfiguration configuration, string name)
         {
             return configuration[$"service:{name}:protocol"];

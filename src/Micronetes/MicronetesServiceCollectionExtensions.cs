@@ -21,7 +21,6 @@ namespace Micronetes
         {
             services.TryAddSingleton(typeof(IClientFactory<>), typeof(DefaultClientFactory<>));
             services.TryAddSingleton<IClientFactory<ConnectionMultiplexer>, StackExchangeRedisClientFactory>();
-            services.TryAddSingleton<IClientFactory<PubSubClient>, StackExchangeRedisPubSubClientFactory>();
             services.TryAddSingleton<IClientFactory<IModel>, RabbitMQClientFactory>();
             services.TryAddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
             services.AddOpenTelemetry((sp, builder) =>

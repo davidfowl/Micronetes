@@ -59,7 +59,7 @@ namespace Worker
             {
                 try
                 {
-                    return _queueFactory.CreateClient("Rabbit");
+                    return _queueFactory.CreateClient("rabbit");
                 }
                 catch (Exception ex)
                 {
