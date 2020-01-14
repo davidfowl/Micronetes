@@ -163,20 +163,16 @@ service:myweb:management:port=3000
 service:myweb:management:protocol=http
 ```
 
-The "default" binding can be accessed by the name of the service. To access other addresses, the full name must be accessed:
+### Environment
 
-e.g.
+The ochestrator also injects various environment variables to communicate various pieces of information to the application:
 
-```C#
-// Access the default port of the MyWeb service
-IClientFactory<HttpClient> clientFactory = ...
-var defaultClient = clientFactory.CreateClient("myweb");
+Each binding in the list of binding for a particular service is injected into that application as an environment variable in the form `{PROTOCOL ?? "HTTP"}_PORT`. For example:
 
-// Access the management port of the MyWeb service
-var managementClient = clientFactory.CreateClient("myweb:management");
 ```
-
-Most services will have a single binding so accessing them by service name directly should work.
+HTTP_PORT=5005
+HTTPS_PORT=5006
+```
 
 ##  The Micronetes SDK
 
@@ -189,17 +185,24 @@ public interface IClientFactory<TClient>
 }
 ```
 
-### Client abstractions
+### Service Discovery via IConfiguration
 
-- HTTP - `HttpClient`
-- PubSub - TBD
-- Queue - TBD
-- RPC - TBD
+The Micronetes SDK includes extension methods for resolving various addresses of other services:
 
-The intent is to make decouple service addresses from the implementation. There are 2 flavours of TClient:
+```C#
+using System;
 
-1. TClient can be an abstraction. 
-2. TClient can be a concrete client implementation (like ConnectionMultipler).
+namespace Microsoft.Extensions.Configuration
+{
+    public static class ConfigurationExtensions
+    {
+        public static string GetUrl(this IConfiguration configuration, string name);
+        public static string GetHost(this IConfiguration configuration, string name);
+        public static int? GetPort(this IConfiguration configuration, string name);
+        public static string GetProtocol(this IConfiguration configuration, string name);
+    }
+}
+```
 
 ## Using CI builds
 
