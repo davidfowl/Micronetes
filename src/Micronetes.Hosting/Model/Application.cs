@@ -142,7 +142,9 @@ namespace Micronetes.Hosting.Model
                     continue;
                 }
 
-                var extension = Path.GetExtension(project.AbsolutePath).ToLower();
+                var projectFilePath = project.AbsolutePath.Replace('\\', Path.DirectorySeparatorChar);
+
+                var extension = Path.GetExtension(projectFilePath).ToLower();
                 switch (extension)
                 {
                     case ".csproj":
@@ -152,7 +154,7 @@ namespace Micronetes.Hosting.Model
                         continue;
                 }
 
-                var description = CreateDescriptionFromProject(project.AbsolutePath);
+                var description = CreateDescriptionFromProject(projectFilePath);
 
                 if (description != null)
                 {
