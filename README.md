@@ -76,6 +76,12 @@ You can run the following commands
 - `curl http://127.0.0.1:51018/api/v1/web` - This will show the state of the web service
 - `curl http://127.0.0.1:51018/api/v1/logs/worker` - This will show the logs for worker
 
+You can also use a browser to view the dashboard:
+
+![image](https://user-images.githubusercontent.com/95136/72421513-7f7e4f00-3735-11ea-8763-53b6cd3724b4.png)
+
+You can use this to view basic information about running services and to see streaming logs from each of them.
+
 **Reference**
 
 ```yaml
