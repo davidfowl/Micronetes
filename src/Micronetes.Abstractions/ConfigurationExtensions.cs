@@ -4,7 +4,7 @@ namespace Microsoft.Extensions.Configuration
 {
     public static class ConfigurationExtensions
     {
-        public static Uri GetUrl(this IConfiguration configuration, string name)
+        public static Uri GetUri(this IConfiguration configuration, string name)
         {
             var host = configuration.GetHost(name);
             var port = configuration.GetPort(name);

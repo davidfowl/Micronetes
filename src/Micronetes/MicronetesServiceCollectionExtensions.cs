@@ -26,7 +26,7 @@ namespace Micronetes
             services.AddOpenTelemetry((sp, builder) =>
             {
                 var config = sp.GetRequiredService<IConfiguration>();
-                var zipkinUri = config.GetUrl("zipkin");
+                var zipkinUri = config.GetUri("zipkin");
 
                 var env = sp.GetRequiredService<IHostEnvironment>();
 

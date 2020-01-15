@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -13,13 +14,13 @@ namespace Worker
 {
     public class QueueWorker : IHostedService
     {
-        private readonly IClientFactory<IModel> _queueFactory;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<QueueWorker> _logger;
 
-        public QueueWorker(ILogger<QueueWorker> logger, IClientFactory<IModel> queueFactory)
+        public QueueWorker(ILogger<QueueWorker> logger, IConfiguration configuration)
         {
             _logger = logger;
-            _queueFactory = queueFactory;
+            _configuration = configuration;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -59,7 +60,15 @@ namespace Worker
             {
                 try
                 {
-                    return _queueFactory.CreateClient("rabbit");
+                    var uri = _configuration.GetUri("rabbit");
+                    var factory = new ConnectionFactory()
+                    {
+                        HostName = uri.Host,
+                        Port = uri.Port
+                    };
+
+                    var connection = factory.CreateConnection();
+                    return connection.CreateModel();
                 }
                 catch (Exception ex)
                 {

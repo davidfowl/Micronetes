@@ -196,7 +196,7 @@ namespace Microsoft.Extensions.Configuration
 {
     public static class ConfigurationExtensions
     {
-        public static Uri GetUrl(this IConfiguration configuration, string name);
+        public static Uri GetUri(this IConfiguration configuration, string name);
         public static string GetHost(this IConfiguration configuration, string name);
         public static int? GetPort(this IConfiguration configuration, string name);
         public static string GetProtocol(this IConfiguration configuration, string name);

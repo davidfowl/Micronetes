@@ -7,9 +7,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="3.1.0" />
+    <PackageReference Include="RabbitMQ.Client" Version="5.1.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Micronetes\Micronetes.csproj" />
+    <ProjectReference Include="..\..\src\Micronetes.Abstractions\Micronetes.Abstractions.csproj" />
   </ItemGroup>
 </Project>
