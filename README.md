@@ -37,7 +37,7 @@ app.sln
 
 The core model is an application which is made up of several services. Here's an example of a small distributed application:
 
-**app.yaml**
+**m8s.yaml**
 
 ```yaml
 - name: web
@@ -54,7 +54,7 @@ The core model is an application which is made up of several services. Here's an
     - port: 5672
 ```
 
-**m8s run app.yaml** will run launch 2 instances of the Web and 3 of Worker and will `docker run` the rabbitmq image. There's a built-in proxy that will load balance the traffic in a round-robin matter between replicas of the various processes. It will also make those services available via environment variables following the convention described later in this section.
+**m8s run** will run launch 2 instances of the Web and 3 of Worker and will `docker run` the rabbitmq image. There's a built-in proxy that will load balance the traffic in a round-robin matter between replicas of the various processes. It will also make those services available via environment variables following the convention described later in this section.
 
 There is also a mini control plane built in that can be used to view the state of the services and to view the logs of the various services. As an example:
 
