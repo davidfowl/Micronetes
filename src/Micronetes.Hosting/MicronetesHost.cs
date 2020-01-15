@@ -281,7 +281,7 @@ namespace Micronetes.Hosting
                                     return;
                                 }
 
-                                await JsonSerializer.SerializeAsync(context.Response.Body, service.Logs, options);
+                                await JsonSerializer.SerializeAsync(context.Response.Body, service.CachedLogs, options);
                             });
 
                             endpoints.MapGet("/api/v1/metrics", async context =>

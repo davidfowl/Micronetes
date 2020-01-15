@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.Reactive.Subjects;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -9,6 +9,19 @@ namespace Micronetes.Hosting.Model
 {
     public class Service
     {
+        public Service()
+        {
+            Logs.Subscribe(entry =>
+            {
+                if (CachedLogs.Count > 5000)
+                {
+                    CachedLogs.Dequeue();
+                }
+
+                CachedLogs.Enqueue(entry);
+            });
+        }
+
         public ServiceDescription Description { get; set; }
 
         public ConcurrentDictionary<string, object> Status { get; set; } = new ConcurrentDictionary<string, object>();
@@ -22,7 +35,10 @@ namespace Micronetes.Hosting.Model
         public Dictionary<object, object> Items { get; } = new Dictionary<object, object>();
 
         [JsonIgnore]
-        public List<string> Logs { get; } = new List<string>();
+        public Queue<string> CachedLogs { get; } = new Queue<string>();
+
+        [JsonIgnore]
+        public Subject<string> Logs { get; set; } = new Subject<string>();
     }
 
     public class PortMapping

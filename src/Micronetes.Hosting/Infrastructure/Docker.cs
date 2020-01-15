@@ -86,7 +86,7 @@ namespace Micronetes.Hosting.Infrastructure
                     {
                         if (data != null)
                         {
-                            service.Logs.Add(data);
+                            service.Logs.OnNext(data);
                         }
                     },
                     onStart: pid =>

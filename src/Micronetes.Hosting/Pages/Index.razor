@@ -10,6 +10,7 @@
             <th>Type</th>
             <th>Bindings</th>
             <th>Replicas</th>
+            <th>Logs</th>
         </tr>
     </thead>
     <tbody>
@@ -56,6 +57,12 @@
                     }
                 </td>
                 <td>@service.Value.Description.Replicas</td>
+                <td>
+                    @{ var path = $"Logs/{service.Value.Description.Name}"; }
+                    <NavLink class="nav-link" href="@path">
+                        View
+                    </NavLink>
+                </td>
             </tr>
         }
     </tbody>

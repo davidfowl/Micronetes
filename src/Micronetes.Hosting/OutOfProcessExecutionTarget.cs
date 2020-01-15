@@ -171,7 +171,7 @@ namespace Micronetes.Hosting
                                     return;
                                 }
 
-                                service.Logs.Add("[" + replica + "]: " + data);
+                                service.Logs.OnNext("[" + replica + "]: " + data);
                             },
                             onStart: pid =>
                             {
