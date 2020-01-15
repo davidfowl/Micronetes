@@ -91,17 +91,10 @@ namespace Micronetes.Host
                 Required = false
             });
 
-            command.AddOption(new Option("--elastic")
+            command.AddOption(new Option("--logs")
             {
-                Description = "Elasticsearch URL. Write structured application logs to Elasticsearch.",
-                Argument = new Argument<string>("elastic"),
-                Required = false
-            });
-
-            command.AddOption(new Option("--appinsights")
-            {
-                Description = "ApplicationInsights instrumentation key. Write structured application logs to ApplicationInsights.",
-                Argument = new Argument<string>("instrumenation-key"),
+                Description = "Write structured application logs to the specified log providers. Supported providers are elastic (Elasticsearch) and ai (ApplicationInsights).",
+                Argument = new Argument<string>("logs"),
                 Required = false
             });
 

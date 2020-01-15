@@ -363,26 +363,39 @@ namespace Micronetes.Hosting
             // to any of the supported sinks, currently (elastic search and app insights)
             application.LoggerFactory = LoggerFactory.Create(builder =>
             {
-                var loggerConfiguration = new LoggerConfiguration()
-                                            .MinimumLevel.Verbose()
-                                            .Enrich.FromLogContext();
+                var logs = configuration["logs"];
 
-                var elasticSearch = configuration["elastic"];
-
-                if (!string.IsNullOrEmpty(elasticSearch))
+                if (logs == null)
                 {
-                    logger.LogInformation("Using ElasticSearch at {URL}", elasticSearch);
-                    loggerConfiguration.WriteTo.Elasticsearch(elasticSearch);
+                    return;
                 }
 
-                builder.AddSerilog(loggerConfiguration.CreateLogger());
+                var pair = logs.Split('=');
 
-                var instrumentationKey = configuration["appinsights"];
-
-                if (!string.IsNullOrEmpty(instrumentationKey))
+                if (pair.Length < 2)
                 {
-                    logger.LogInformation("Using ApplicationInsights instrumentation key {InstrumentationKey}", instrumentationKey);
-                    builder.AddApplicationInsights(instrumentationKey);
+                    return;
+                }
+
+                if (string.Equals(pair[0], "elastic", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(pair[1]))
+                {
+
+                    var loggerConfiguration = new LoggerConfiguration()
+                                                .MinimumLevel.Verbose()
+                                                .Enrich.FromLogContext();
+
+                    logger.LogInformation("Using ElasticSearch at {URL}", pair[1]);
+                    loggerConfiguration.WriteTo.Elasticsearch(pair[1]);
+
+                    builder.AddSerilog(loggerConfiguration.CreateLogger());
+                }
+
+                if (string.Equals(pair[0], "ai", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(pair[1]))
+                {
+                    logger.LogInformation("Using ApplicationInsights instrumentation key {InstrumentationKey}", pair[1]);
+                    builder.AddApplicationInsights(pair[1]);
                 }
             });
 
