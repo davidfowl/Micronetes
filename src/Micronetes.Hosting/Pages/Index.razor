@@ -16,6 +16,7 @@
     <tbody>
         @foreach (var service in application.Services)
         {
+            var logsPath = $"Logs/{service.Value.Description.Name}";
             <tr>
                 <td>@service.Value.Description.Name</td>
                 <td>
@@ -58,10 +59,7 @@
                 </td>
                 <td>@service.Value.Description.Replicas</td>
                 <td>
-                    @{ var path = $"Logs/{service.Value.Description.Name}"; }
-                    <NavLink class="nav-link" href="@path">
-                        View
-                    </NavLink>
+                    <NavLink href="@logsPath">View</NavLink>
                 </td>
             </tr>
         }
