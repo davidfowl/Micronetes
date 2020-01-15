@@ -402,7 +402,7 @@ namespace Micronetes.Hosting
 
             await host.StartAsync();
 
-            logger.LogInformation("API server running on {Address}", serverAddressesFeature.Addresses.First());
+            logger.LogInformation("Dashboard running on {Address}", serverAddressesFeature.Addresses.First());
 
             try
             {
