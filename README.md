@@ -213,7 +213,7 @@ To use CI builds add the following nuget feed:
 <configuration>
     <packageSources>
         <clear />
-        <add key="bedrockframework" value="https://f.feedz.io/davidfowl/micronetes/nuget/index.json" />
+        <add key="micronetes" value="https://f.feedz.io/davidfowl/micronetes/nuget/index.json" />
         <add key="NuGet.org" value="https://api.nuget.org/v3/index.json" />
     </packageSources>
 </configuration>
