@@ -5,6 +5,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <Description>Orchestration host APIs.</Description>
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
   </PropertyGroup>
 
   <ItemGroup>
