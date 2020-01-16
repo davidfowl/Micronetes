@@ -182,7 +182,11 @@ HTTPS_PORT=5006
 
 ##  The Micronetes SDK
 
-The Micronetes SDK uses the conventions introduced by the orchestrator and introduces primitives that simplify microservice communication. The core abstraction for communicating with another microservice is an `IClientFactory<TClient>`.
+The Micronetes SDK uses the conventions introduced by the orchestrator and introduces primitives that simplify microservice communication. 
+
+### IClientFactory\<TClient\>
+
+As a generialization of [IHttpClientFactory](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/http-requests?view=aspnetcore-3.1) introduced in .NET Core 2.1, the `IClientFactory<TClient>` is a abstraction for a managing the lifetime of any `TClient`. The client name here is de-coupled from the service name.
 
 ```C#
 public interface IClientFactory<TClient>
