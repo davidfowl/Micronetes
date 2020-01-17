@@ -14,11 +14,6 @@
     <PackageReference Include="protobuf-net.Grpc" Version="1.0.21" />
     <PackageReference Include="StackExchange.Redis" Version="2.0.601" />
     <PackageReference Include="RabbitMQ.Client" Version="5.1.2" />
-    <PackageReference Include="OpenTelemetry" Version="0.2.0-alpha.100" />
-    <PackageReference Include="OpenTelemetry.Collector.AspNetCore" Version="0.2.0-alpha.100" />
-    <PackageReference Include="OpenTelemetry.Exporter.Zipkin" Version="0.2.0-alpha.100" />
-    <PackageReference Include="OpenTelemetry.Collector.Dependencies" Version="0.2.0-alpha.100" />
-    <PackageReference Include="OpenTelemetry.Hosting" Version="0.2.0-alpha.100" />
   </ItemGroup>
 
   <ItemGroup>

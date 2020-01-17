@@ -98,6 +98,13 @@ namespace Micronetes.Host
                 Required = false
             });
 
+            command.AddOption(new Option("--dtrace")
+            {
+                Description = "Write distributed traces to the specified providers. Supported providers are zipkin.",
+                Argument = new Argument<string>("logs"),
+                Required = false
+            });
+
             command.AddOption(new Option("--debug")
             {
                 Description = "Wait for debugger attach in all services.",

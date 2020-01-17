@@ -4,14 +4,3 @@
   bindings:
     - port: 9411
       protocol: http
-- name: grafana
-  dockerImage: grafana/grafana
-  bindings:
-    - port: 3000
-- name: elk # https://elk-docker.readthedocs.io/
-  dockerImage: sebp/elk
-  bindings:
-    - port: 5601
-    - port: 9200
-    - port: 5044
-
