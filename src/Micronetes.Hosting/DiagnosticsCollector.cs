@@ -386,6 +386,40 @@ namespace Micronetes.Hosting
                     // Logging
                     string lastFormattedMessage = "";
 
+                    var logActivities = new Dictionary<Guid, LogActivityItem>();
+                    var stack = new Stack<Guid>();
+
+                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "ActivityJsonStart/Start", (traceEvent) =>
+                    {
+                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+                        var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
+
+                        // TODO: Store this information by logger factory id
+                        var item = new LogActivityItem
+                        {
+                            ActivityID = traceEvent.ActivityID,
+                            ScopedObject = new LogObject(JsonDocument.Parse(argsJson).RootElement),
+                        };
+
+                        if (stack.TryPeek(out var parentId) && logActivities.TryGetValue(parentId, out var parentItem))
+                        {
+                            item.Parent = parentItem;
+                        }
+
+                        stack.Push(traceEvent.ActivityID);
+                        logActivities[traceEvent.ActivityID] = item;
+                    });
+
+                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "ActivityJsonStop/Stop", (traceEvent) =>
+                    {
+                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+
+                        stack.Pop();
+                        logActivities.Remove(traceEvent.ActivityID);
+                    });
+
                     source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "MessageJson", (traceEvent) =>
                     {
                         // Level, FactoryID, LoggerName, EventID, EventName, ExceptionJson, ArgumentsJson
@@ -414,8 +448,18 @@ namespace Micronetes.Hosting
 
                         var logger = loggerFactory.CreateLogger(categoryName);
 
-                        // TODO: Support scopes
-                        // using var scope = logger.BeginScope(scope);
+                        var scopes = new List<IDisposable>();
+
+                        if (logActivities.TryGetValue(traceEvent.ActivityID, out var logActivityItem))
+                        {
+                            // REVIEW: Does order matter here? We're combining everything anyways.
+                            while (logActivityItem != null)
+                            {
+                                scopes.Add(logger.BeginScope(logActivityItem.ScopedObject));
+
+                                logActivityItem = logActivityItem.Parent;
+                            }
+                        }
 
                         try
                         {
@@ -447,6 +491,10 @@ namespace Micronetes.Hosting
                         catch (Exception ex)
                         {
                             _logger.LogDebug(ex, "Error processing log entry for {ServiceName}", replicaName);
+                        }
+                        finally
+                        {
+                            scopes.ForEach(d => d.Dispose());
                         }
                     });
 
@@ -493,6 +541,15 @@ namespace Micronetes.Hosting
             public ISpan Span { get; set; }
 
             public DateTime StartTime { get; set; }
+        }
+
+        private class LogActivityItem
+        {
+            public Guid ActivityID { get; set; }
+
+            public LogObject ScopedObject { get; set; }
+
+            public LogActivityItem Parent { get; set; }
         }
     }
 }

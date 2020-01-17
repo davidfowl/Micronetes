@@ -12,7 +12,7 @@ namespace Microsoft.Hosting.Logging
         private readonly string _formattedMessage;
         private List<KeyValuePair<string, object>> _items = new List<KeyValuePair<string, object>>();
 
-        public LogObject(JsonElement element, string formattedMessage)
+        public LogObject(JsonElement element, string formattedMessage = null)
         {
             foreach (var item in element.EnumerateObject())
             {
@@ -61,7 +61,7 @@ namespace Microsoft.Hosting.Logging
 
         public override string ToString()
         {
-            return _formattedMessage;
+            return _formattedMessage ?? string.Empty;
         }
     }
 }

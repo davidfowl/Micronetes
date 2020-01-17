@@ -394,6 +394,9 @@ namespace Micronetes.Hosting
                 case "console":
                     logger.LogInformation("logs: Using console logs");
                     break;
+                case "seq":
+                    logger.LogInformation("logs: Using Seq at {URL}", logProviderValue);
+                    break;
                 default:
                     break;
             }
@@ -417,9 +420,8 @@ namespace Micronetes.Hosting
                     var loggerConfiguration = new LoggerConfiguration()
                                                 .Enrich.WithProperty("Application", serviceName)
                                                 .Enrich.WithProperty("Instance", replicaName)
-                                                .Enrich.FromLogContext();
-
-                    loggerConfiguration.WriteTo.Elasticsearch(logProviderValue);
+                                                .Enrich.FromLogContext()
+                                                .WriteTo.Elasticsearch(logProviderValue);
 
                     builder.AddSerilog(loggerConfiguration.CreateLogger());
                 }
@@ -429,9 +431,19 @@ namespace Micronetes.Hosting
                     var loggerConfiguration = new LoggerConfiguration()
                                                 .Enrich.WithProperty("Application", serviceName)
                                                 .Enrich.WithProperty("Instance", replicaName)
-                                                .Enrich.FromLogContext();
+                                                .Enrich.FromLogContext()
+                                                .WriteTo.Console(outputTemplate: "[{Instance}]: [{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
 
-                    loggerConfiguration.WriteTo.Console(outputTemplate: "[{Instance}]: [{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+                    builder.AddSerilog(loggerConfiguration.CreateLogger());
+                }
+
+                if (string.Equals(logProviderKey, "seq", StringComparison.OrdinalIgnoreCase))
+                {
+                    var loggerConfiguration = new LoggerConfiguration()
+                                                .Enrich.WithProperty("Application", serviceName)
+                                                .Enrich.WithProperty("Instance", replicaName)
+                                                .Enrich.FromLogContext()
+                                                .WriteTo.Seq(logProviderValue);
 
                     builder.AddSerilog(loggerConfiguration.CreateLogger());
                 }

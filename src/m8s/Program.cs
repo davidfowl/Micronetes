@@ -93,7 +93,7 @@ namespace Micronetes.Host
 
             command.AddOption(new Option("--logs")
             {
-                Description = "Write structured application logs to the specified log providers. Supported providers are elastic (Elasticsearch) and ai (ApplicationInsights).",
+                Description = "Write structured application logs to the specified log providers. Supported providers are console, elastic (Elasticsearch), ai (ApplicationInsights), seq.",
                 Argument = new Argument<string>("logs"),
                 Required = false
             });
