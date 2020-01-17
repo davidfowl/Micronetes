@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using Microsoft.Build.Construction;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace.Configuration;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -170,7 +170,9 @@ namespace Micronetes.Hosting.Model
 
         public Dictionary<string, Service> Services { get; }
 
-        internal ILoggerFactory LoggerFactory { get; set; }
+        internal Action<string, string, ILoggingBuilder> ConfigureLogging { get; set; }
+        
+        internal Action<string, string, TracerBuilder> ConfigureTracing { get; set; }
 
         internal void PopulateEnvironment(Service service, Action<string, string> set)
         {

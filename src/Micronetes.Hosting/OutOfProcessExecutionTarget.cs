@@ -1,39 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Infrastructure;
-using Micronetes.Hosting.Logging;
-using Micronetes.Hosting.Metrics;
 using Micronetes.Hosting.Model;
-using Microsoft.Diagnostics.NETCore.Client;
-using Microsoft.Diagnostics.Tracing;
-using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.EventSource;
-using Microsoft.Hosting.Logging;
 
 namespace Micronetes.Hosting
 {
     public class OutOfProcessExecutionTarget : IExecutionTarget
     {
-        private static readonly string MicrosoftExtensionsLoggingProviderName = "Microsoft-Extensions-Logging";
-        private static readonly string SystemRuntimeEventSourceName = "System.Runtime";
-        private static readonly string MicrosoftAspNetCoreHostingEventSourceName = "Microsoft.AspNetCore.Hosting";
-        private static readonly string GrpcAspNetCoreServer = "Grpc.AspNetCore.Server";
-
         private readonly ILogger _logger;
         private readonly bool _debugMode;
+        private DiagnosticsCollector _diagnosticsCollector;
 
         public OutOfProcessExecutionTarget(ILogger logger, bool debugMode = true)
         {
             _logger = logger;
             _debugMode = debugMode;
+            _diagnosticsCollector = new DiagnosticsCollector(logger);
         }
 
         public Task StartAsync(Application application)
@@ -157,7 +145,22 @@ namespace Micronetes.Hosting
 
                     var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
 
-                    var eventPipeThread = new Thread(state => ProcessEvents(application.LoggerFactory, applicationName, service.Description.Name, (int)state, replica, status, metricsTokenSource.Token));
+                    // This is the thread that will collect diagnostics from the running process
+                    // - Logs - I'll collect structured logs from Microsoft.Extensions.Logging
+                    // - Metrics - It'll collect EventCounters
+                    // - Distribued Traces - It'll create spans
+                    var diagnosticsThread = new Thread(state =>
+                    {
+                        _diagnosticsCollector.ProcessEvents(
+                            application.ConfigureTracing,
+                            application.ConfigureLogging,
+                            applicationName,
+                            service.Description.Name,
+                            (int)state,
+                            replica,
+                            status,
+                            metricsTokenSource.Token);
+                    });
 
                     try
                     {
@@ -186,7 +189,7 @@ namespace Micronetes.Hosting
 
                                 status["pid"] = pid;
 
-                                eventPipeThread.Start(pid);
+                                diagnosticsThread.Start(pid);
                             },
                             throwOnError: false,
                             cancellationToken: processInfo.StoppedTokenSource.Token);
@@ -197,7 +200,7 @@ namespace Micronetes.Hosting
                         {
                             metricsTokenSource.Cancel();
 
-                            eventPipeThread.Join();
+                            diagnosticsThread.Join();
                         }
                     }
                     catch (Exception ex)
@@ -310,268 +313,6 @@ namespace Micronetes.Hosting
             }
 
             return Path.Combine(debugOutputPath, "netcoreapp3.1", outputFileName);
-        }
-
-        private void ProcessEvents(ILoggerFactory loggerFactory, string applicationName, string serviceName, int processId, string replicaName, ServiceReplica replica, CancellationToken cancellationToken)
-        {
-            var hasEventPipe = false;
-
-            for (int i = 0; i < 10; ++i)
-            {
-                if (DiagnosticsClient.GetPublishedProcesses().Contains(processId))
-                {
-                    hasEventPipe = true;
-                    break;
-                }
-
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                Thread.Sleep(500);
-            }
-
-            if (!hasEventPipe)
-            {
-                _logger.LogInformation("Process id {PID}, does not support event pipe", processId);
-                return;
-            }
-
-            _logger.LogInformation("Listening for event pipe events for {ServiceName} on process id {PID}", replicaName, processId);
-
-            var scopeState = new Dictionary<string, object>
-            {
-                { "Application", serviceName },
-                { "Instance", replicaName }
-            };
-
-            var providers = new List<EventPipeProvider>()
-            {
-                // Runtime Metrics
-                new EventPipeProvider(
-                    SystemRuntimeEventSourceName,
-                    EventLevel.Informational,
-                    (long)ClrTraceEventParser.Keywords.None,
-                    new Dictionary<string, string>() {
-                        { "EventCounterIntervalSec", "1" }
-                    }
-                ),
-                new EventPipeProvider(
-                    MicrosoftAspNetCoreHostingEventSourceName,
-                    EventLevel.Informational,
-                    (long)ClrTraceEventParser.Keywords.None,
-                    new Dictionary<string, string>() {
-                        { "EventCounterIntervalSec", "1" }
-                    }
-                ),
-                new EventPipeProvider(
-                    GrpcAspNetCoreServer,
-                    EventLevel.Informational,
-                    (long)ClrTraceEventParser.Keywords.None,
-                    new Dictionary<string, string>() {
-                        { "EventCounterIntervalSec", "1" }
-                    }
-                ),
-                
-                // Application Metrics
-                new EventPipeProvider(
-                    applicationName,
-                    EventLevel.Informational,
-                    (long)ClrTraceEventParser.Keywords.None,
-                    new Dictionary<string, string>() {
-                        { "EventCounterIntervalSec", "1" }
-                    }
-                ),
-
-                // Logging
-                new EventPipeProvider(
-                    MicrosoftExtensionsLoggingProviderName,
-                    EventLevel.LogAlways,
-                    (long)(LoggingEventSource.Keywords.JsonMessage | LoggingEventSource.Keywords.FormattedMessage)
-                )
-            };
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                EventPipeSession session = null;
-                var client = new DiagnosticsClient(processId);
-
-                try
-                {
-                    session = client.StartEventPipeSession(providers);
-                }
-                catch (EndOfStreamException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    if (!cancellationToken.IsCancellationRequested)
-                    {
-                        _logger.LogDebug(0, ex, "Failed to start the event pipe session");
-                    }
-
-                    // We can't even start the session, wait until the process boots up again to start another metrics thread
-                    break;
-                }
-
-                void StopSession()
-                {
-                    try
-                    {
-                        session.Stop();
-                    }
-                    catch (EndOfStreamException)
-                    {
-                        // If the app we're monitoring exits abruptly, this may throw in which case we just swallow the exception and exit gracefully.
-                    }
-                    // We may time out if the process ended before we sent StopTracing command. We can just exit in that case.
-                    catch (TimeoutException)
-                    {
-                    }
-                    // On Unix platforms, we may actually get a PNSE since the pipe is gone with the process, and Runtime Client Library
-                    // does not know how to distinguish a situation where there is no pipe to begin with, or where the process has exited
-                    // before dotnet-counters and got rid of a pipe that once existed.
-                    // Since we are catching this in StopMonitor() we know that the pipe once existed (otherwise the exception would've 
-                    // been thrown in StartMonitor directly)
-                    catch (PlatformNotSupportedException)
-                    {
-                    }
-                }
-
-                using var _ = cancellationToken.Register(() => StopSession());
-
-                try
-                {
-                    var source = new EventPipeEventSource(session.EventStream);
-
-                    // Metrics
-                    source.Dynamic.All += traceEvent =>
-                    {
-                        try
-                        {
-                            if (traceEvent.EventName.Equals("EventCounters"))
-                            {
-                                var payloadVal = (IDictionary<string, object>)traceEvent.PayloadValue(0);
-                                var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
-
-                                ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
-
-                                replica.Metrics[traceEvent.ProviderName + "/" + payload.Name] = payload.Value;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error processing counter for {ProviderName}:{EventName}", traceEvent.ProviderName, traceEvent.EventName);
-                        }
-                    };
-
-                    // Logging
-                    string lastFormattedMessage = "";
-
-                    // TODO: Handle scopes
-
-                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "MessageJson", (traceEvent) =>
-                    {
-                        // Level, FactoryID, LoggerName, EventID, EventName, ExceptionJson, ArgumentsJson
-                        var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
-                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
-                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
-                        var eventId = (int)traceEvent.PayloadByName("EventId");
-                        var eventName = (string)traceEvent.PayloadByName("EventName");
-                        var exceptionJson = (string)traceEvent.PayloadByName("ExceptionJson");
-                        var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
-
-                        // There's a bug that causes some of the columns to get mixed up
-                        if (eventName.StartsWith("{"))
-                        {
-                            argsJson = exceptionJson;
-                            exceptionJson = eventName;
-                            eventName = null;
-                        }
-
-                        if (string.IsNullOrEmpty(argsJson))
-                        {
-                            return;
-                        }
-
-                        Exception exception = null;
-
-                        var logger = loggerFactory.CreateLogger(categoryName);
-
-                        using var scope = logger.BeginScope(scopeState);
-
-                        try
-                        {
-                            if (exceptionJson != "{}")
-                            {
-                                var exceptionMessage = JsonSerializer.Deserialize<JsonElement>(exceptionJson);
-                                exception = new LoggerException(exceptionMessage);
-                            }
-
-                            var message = JsonSerializer.Deserialize<JsonElement>(argsJson);
-                            if (message.TryGetProperty("{OriginalFormat}", out var formatElement))
-                            {
-                                var formatString = formatElement.GetString();
-                                var formatter = new LogValuesFormatter(formatString);
-                                object[] args = new object[formatter.ValueNames.Count];
-                                for (int i = 0; i < args.Length; i++)
-                                {
-                                    args[i] = message.GetProperty(formatter.ValueNames[i]).GetString();
-                                }
-
-                                logger.Log(logLevel, new EventId(eventId, eventName), exception, formatString, args);
-                            }
-                            else
-                            {
-                                var obj = new LogObject(message, lastFormattedMessage);
-                                logger.Log(logLevel, new EventId(eventId, eventName), obj, exception, LogObject.Callback);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogDebug(ex, "Error processing log entry for {ServiceName}", replicaName);
-                        }
-                    });
-
-                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "FormattedMessage", (traceEvent) =>
-                    {
-                        // Level, FactoryID, LoggerName, EventID, EventName, FormattedMessage
-                        var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
-                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
-                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
-                        var eventId = (int)traceEvent.PayloadByName("EventId");
-                        var eventName = (string)traceEvent.PayloadByName("EventName");
-                        var formattedMessage = (string)traceEvent.PayloadByName("FormattedMessage");
-
-                        if (string.IsNullOrEmpty(formattedMessage))
-                        {
-                            formattedMessage = eventName;
-                            eventName = "";
-                        }
-
-                        lastFormattedMessage = formattedMessage;
-                    });
-
-
-                    source.Process();
-                }
-                catch (DiagnosticsClientException ex)
-                {
-                    _logger.LogDebug(0, ex, "Failed to start the event pipe session");
-                }
-                catch (Exception)
-                {
-                    // This fails if stop is called or if the process dies
-                }
-                finally
-                {
-                    session?.Dispose();
-                }
-            }
-
-            _logger.LogInformation("Event pipe collection completed for {ServiceName} on process id {PID}", replicaName, processId);
         }
 
         private class ProcessInfo

@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Net.Http;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using OpenTelemetry.Trace.Configuration;
 using RabbitMQ.Client;
 using StackExchange.Redis;
 
@@ -23,25 +21,6 @@ namespace Micronetes
             services.TryAddSingleton<IClientFactory<ConnectionMultiplexer>, StackExchangeRedisClientFactory>();
             services.TryAddSingleton<IClientFactory<IModel>, RabbitMQClientFactory>();
             services.TryAddSingleton<IClientFactory<HttpClient>, HttpClientFactory>();
-            services.AddOpenTelemetry((sp, builder) =>
-            {
-                var config = sp.GetRequiredService<IConfiguration>();
-                var zipkinUri = config.GetUri("zipkin");
-
-                var env = sp.GetRequiredService<IHostEnvironment>();
-
-                builder.AddRequestCollector();
-                builder.AddDependencyCollector();
-
-                if (zipkinUri != null)
-                {
-                    builder.UseZipkin(o =>
-                    {
-                        o.ServiceName = env.ApplicationName;
-                        o.Endpoint = new Uri(zipkinUri, "api/v2/spans");
-                    });
-                }
-            });
             return services;
         }
     }

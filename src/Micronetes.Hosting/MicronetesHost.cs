@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace.Configuration;
 using Serilog;
 using Serilog.Filters;
 
@@ -359,46 +360,107 @@ namespace Micronetes.Hosting
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
             var target = new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
 
-            // This is the logger factory for application logs. It allows re-routing event pipe collected logs (structured logs)
-            // to any of the supported sinks, currently (elastic search and app insights)
-            application.LoggerFactory = LoggerFactory.Create(builder =>
-            {
-                var logs = configuration["logs"];
 
-                if (logs == null)
+            static (string, string) GetProvider(IConfiguration configuration, string providerName)
+            {
+                var providerString = configuration[providerName];
+
+                if (string.IsNullOrEmpty(providerString))
                 {
-                    return;
+                    return (null, null);
                 }
 
-                var pair = logs.Split('=');
+                var pair = providerString.Split('=');
 
                 if (pair.Length < 2)
                 {
-                    return;
+                    return (pair[0].Trim(), null);
                 }
 
-                if (string.Equals(pair[0], "elastic", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrEmpty(pair[1]))
-                {
+                return (pair[0].Trim(), pair[1].Trim());
+            }
 
+            var (logProviderKey, logProviderValue) = GetProvider(configuration, "logs");
+            var (dTraceProviderKey, dTraceProviderValue) = GetProvider(configuration, "dtrace");
+
+            switch (logProviderKey?.ToLowerInvariant())
+            {
+                case "elastic":
+                    logger.LogInformation("logs: Using ElasticSearch at {URL}", logProviderValue);
+                    break;
+                case "ai":
+                    logger.LogInformation("logs: Using ApplicationInsights instrumentation key {InstrumentationKey}", logProviderValue);
+                    break;
+                case "console":
+                    logger.LogInformation("logs: Using console logs");
+                    break;
+                default:
+                    break;
+            }
+
+            switch (dTraceProviderKey?.ToLowerInvariant())
+            {
+                case "zipkin":
+                    logger.LogInformation("dtrace: Using Zipkin at URL {URL}", dTraceProviderValue);
+                    break;
+                default:
+                    break;
+            }
+
+            // This is the logger factory for application logs. It allows re-routing event pipe collected logs (structured logs)
+            // to any of the supported sinks, currently (elastic search and app insights)
+            application.ConfigureLogging = (serviceName, replicaName, builder) =>
+            {
+                if (string.Equals(logProviderKey, "elastic", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(logProviderValue))
+                {
                     var loggerConfiguration = new LoggerConfiguration()
-                                                .MinimumLevel.Verbose()
+                                                .Enrich.WithProperty("Application", serviceName)
+                                                .Enrich.WithProperty("Instance", replicaName)
                                                 .Enrich.FromLogContext();
 
-                    logger.LogInformation("Using ElasticSearch at {URL}", pair[1]);
-                    loggerConfiguration.WriteTo.Elasticsearch(pair[1]);
+                    loggerConfiguration.WriteTo.Elasticsearch(logProviderValue);
 
                     builder.AddSerilog(loggerConfiguration.CreateLogger());
                 }
 
-                if (string.Equals(pair[0], "ai", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrEmpty(pair[1]))
+                if (string.Equals(logProviderKey, "console", StringComparison.OrdinalIgnoreCase))
                 {
-                    logger.LogInformation("Using ApplicationInsights instrumentation key {InstrumentationKey}", pair[1]);
-                    builder.AddApplicationInsights(pair[1]);
-                }
-            });
+                    var loggerConfiguration = new LoggerConfiguration()
+                                                .Enrich.WithProperty("Application", serviceName)
+                                                .Enrich.WithProperty("Instance", replicaName)
+                                                .Enrich.FromLogContext();
 
+                    loggerConfiguration.WriteTo.Console(outputTemplate: "[{Instance}]: [{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+                    builder.AddSerilog(loggerConfiguration.CreateLogger());
+                }
+
+                if (string.Equals(logProviderKey, "ai", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(logProviderValue))
+                {
+                    builder.AddApplicationInsights(logProviderValue);
+                }
+
+                // REVIEW: How are log levels controlled on the outside?
+                builder.SetMinimumLevel(LogLevel.Information);
+            };
+
+            application.ConfigureTracing = (serviceName, replicaName, builder) =>
+            {
+                if (string.Equals(dTraceProviderKey, "zipkin", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrEmpty(dTraceProviderValue))
+                {
+                    builder.UseZipkin(options =>
+                    {
+                        options.ServiceName = serviceName;
+                        options.Endpoint = new Uri($"{dTraceProviderValue}/api/v2/spans");
+                    });
+                }
+
+                // TODO: Support Jaegar
+                // TODO: Support ApplicationInsights
+            };
 
             await host.StartAsync();
 

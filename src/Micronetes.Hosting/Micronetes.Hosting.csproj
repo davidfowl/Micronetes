@@ -25,6 +25,8 @@
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="2.0.49" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.61701" />
     <PackageReference Include="System.Reactive" Version="4.3.2" />
+    <PackageReference Include="OpenTelemetry" Version="0.2.0-alpha.160" />
+    <PackageReference Include="OpenTelemetry.Exporter.Zipkin" Version="0.2.0-alpha.160" />
   </ItemGroup>
 
   <ItemGroup>
