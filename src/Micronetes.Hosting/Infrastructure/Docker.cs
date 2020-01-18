@@ -25,7 +25,7 @@ namespace Micronetes.Hosting.Infrastructure
             {
                 foreach (var env in serviceDescription.Configuration)
                 {
-                    environmentArguments += $"--env {env.Key}={env.Value} ";
+                    environmentArguments += $"--env {env.Name}={env.Value} ";
                 }
             }
 

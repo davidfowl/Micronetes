@@ -117,7 +117,11 @@ namespace Micronetes.Hosting.Model
             {
                 foreach (var envVar in environmentVariables.EnumerateObject())
                 {
-                    projectDescription.Configuration[envVar.Name] = envVar.Value.GetString();
+                    projectDescription.Configuration.Add(new ConfigurationSource
+                    {
+                        Name = envVar.Name,
+                        Value = envVar.Value.GetString()
+                    });
                 }
             }
 
@@ -171,7 +175,7 @@ namespace Micronetes.Hosting.Model
         public Dictionary<string, Service> Services { get; }
 
         internal Action<string, string, ILoggingBuilder> ConfigureLogging { get; set; }
-        
+
         internal Action<string, string, TracerBuilder> ConfigureTracing { get; set; }
 
         internal void PopulateEnvironment(Service service, Action<string, string> set)
@@ -181,7 +185,7 @@ namespace Micronetes.Hosting.Model
                 // Inject normal configuration
                 foreach (var pair in service.Description.Configuration)
                 {
-                    set(pair.Key, pair.Value);
+                    set(pair.Name, pair.Value);
                 }
             }
 

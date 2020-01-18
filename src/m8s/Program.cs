@@ -62,11 +62,13 @@ namespace Micronetes.Host
   # executable: app.exe # path to an executable (relative to this file)
   # args: --arg1=3 # arguments to pass to the process
   # replicas: 5 # number of times to launch the application
-  # env: # environment variables
+  # env: # array of environment variables
+  #  - name: key
+  #    value: value
   # bindings: # optional array of bindings (ports, connection strings)
     # - port: 8080 # number port of the binding
 ");
-                console.Out.WriteLine("Created \"app.yaml\"");
+                console.Out.WriteLine("Created \"m8s.yaml\"");
             });
 
             return command;
