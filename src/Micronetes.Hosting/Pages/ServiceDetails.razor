@@ -3,12 +3,21 @@
 
 @if (Service == null)
 {
-
+    <span>Unknown service @Service.Description.Name</span>
 }
 else
 {
     <h3>@Service.Description.Name</h3>
 
+    switch (Service.ServiceType)
+    {
+        case ServiceType.Container:
+            break;
+        case ServiceType.Executable:
+            break;
+        case ServiceType.Project:
+            break;
+    }
 }
 
 @code {
@@ -21,10 +30,6 @@ else
 
     protected override void OnInitialized()
     {
-        // TODO: handle this returning false
-        if (application.Services.TryGetValue(ServiceName, out _service))
-        {
-
-        }
+        application.Services.TryGetValue(ServiceName, out _service);
     }
 }

@@ -26,7 +26,25 @@ namespace Micronetes.Hosting.Model
 
         public int Restarts { get; set; }
 
-        public ConcurrentDictionary<string, object> Status { get; set; } = new ConcurrentDictionary<string, object>();
+        public ServiceType ServiceType
+        {
+            get
+            {
+                if (Description.DockerImage != null)
+                {
+                    return ServiceType.Container;
+                }
+
+                if (Description.Project != null)
+                {
+                    return ServiceType.Project;
+                }
+
+                return ServiceType.Executable;
+            }
+        }
+
+        public ServiceStatus Status { get; set; } = new ServiceStatus();
 
         public ConcurrentDictionary<string, ReplicaStatus> Replicas { get; set; } = new ConcurrentDictionary<string, ReplicaStatus>();
 
@@ -43,11 +61,19 @@ namespace Micronetes.Hosting.Model
         public Subject<string> Logs { get; set; } = new Subject<string>();
     }
 
+    public class ServiceStatus
+    {
+        public string ProjectFilePath { get; set; }
+        public string ExecutablePath { get; set; }
+        public string Args { get; set; }
+        public string WorkingDirectory { get; set; }
+    }
+
     public class ProcessStatus : ReplicaStatus
     {
         public int? ExitCode { get; set; }
         public int? Pid { get; set; }
-        public IDictionary<string,string> Environment { get; set; }
+        public IDictionary<string, string> Environment { get; set; }
     }
 
     public class DockerStatus : ReplicaStatus
@@ -81,6 +107,13 @@ namespace Micronetes.Hosting.Model
                 JsonSerializer.Serialize(writer, value, value.GetType(), options);
             }
         }
+    }
+
+    public enum ServiceType
+    {
+        Project,
+        Executable,
+        Container
     }
 
     public class PortMapping

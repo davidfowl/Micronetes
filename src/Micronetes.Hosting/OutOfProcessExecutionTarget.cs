@@ -65,7 +65,7 @@ namespace Micronetes.Hosting
                 // TODO: Requires msbuild
                 applicationName = Path.GetFileNameWithoutExtension(fullProjectPath);
 
-                service.Status["projectFilePath"] = fullProjectPath;
+                service.Status.ProjectFilePath = fullProjectPath;
             }
             else
             {
@@ -84,10 +84,9 @@ namespace Micronetes.Hosting
                 path = "dotnet";
             }
 
-            service.Status["executablePath"] = path;
-            service.Status["workingDirectory"] = workingDirectory;
-            service.Status["args"] = args;
-            service.Status["debugMode"] = _debugMode;
+            service.Status.ExecutablePath = path;
+            service.Status.WorkingDirectory = workingDirectory;
+            service.Status.Args = args;
 
             var processInfo = new ProcessInfo
             {
