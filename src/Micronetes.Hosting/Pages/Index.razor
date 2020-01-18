@@ -10,6 +10,7 @@
             <th>Type</th>
             <th>Bindings</th>
             <th>Replicas</th>
+            <th>Restarts</th>
             <th>Logs</th>
         </tr>
     </thead>
@@ -58,6 +59,7 @@
                     }
                 </td>
                 <td>@service.Value.Description.Replicas</td>
+                <td>@service.Value.Restarts</td>
                 <td>
                     <NavLink href="@logsPath">View</NavLink>
                 </td>

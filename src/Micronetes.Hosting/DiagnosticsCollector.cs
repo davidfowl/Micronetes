@@ -71,7 +71,7 @@ namespace Micronetes.Hosting
                                   string serviceName,
                                   int processId,
                                   string replicaName,
-                                  ServiceReplica replica,
+                                  ReplicaStatus replica,
                                   CancellationToken cancellationToken)
         {
             var hasEventPipe = false;

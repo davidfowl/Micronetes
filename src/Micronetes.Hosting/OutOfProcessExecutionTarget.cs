@@ -97,7 +97,6 @@ namespace Micronetes.Hosting
             void RunApplication(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
-                var restarts = 0;
 
                 var environment = new Dictionary<string, string>
                 {
@@ -126,20 +125,20 @@ namespace Micronetes.Hosting
                 while (!processInfo.StoppedTokenSource.IsCancellationRequested)
                 {
                     var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                    var status = service.Replicas[replica] = new ServiceReplica();
+                    var status = new ProcessStatus();
+                    service.Replicas[replica] = status;
+
                     // This isn't your host name
                     environment["APP_INSTANCE"] = replica;
 
-                    status["exitCode"] = null;
-                    status["pid"] = null;
-                    status["env"] = environment;
+                    status.ExitCode = null;
+                    status.Pid = null;
+                    status.Environment = environment;
 
                     if (hasPorts)
                     {
-                        status["ports"] = ports.Select(p => p.Port);
+                        status.Ports = ports.Select(p => p.Port);
                     }
-
-                    service.Status["restarts"] = restarts;
 
                     _logger.LogInformation("Launching service {ServiceName}: {ExePath} {args}", replica, path, args);
 
@@ -187,16 +186,16 @@ namespace Micronetes.Hosting
                                     _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
                                 }
 
-                                status["pid"] = pid;
+                                status.Pid = pid;
 
                                 diagnosticsThread.Start(pid);
                             },
                             throwOnError: false,
                             cancellationToken: processInfo.StoppedTokenSource.Token);
 
-                        status["exitCode"] = result.ExitCode;
+                        status.ExitCode = result.ExitCode;
 
-                        if (status["pid"] != null)
+                        if (status.Pid != null)
                         {
                             metricsTokenSource.Cancel();
 
@@ -210,10 +209,11 @@ namespace Micronetes.Hosting
                         Thread.Sleep(5000);
                     }
 
-                    restarts++;
-                    if (status["exitCode"] != null)
+                    service.Restarts++;
+
+                    if (status.ExitCode != null)
                     {
-                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", replica, status["exitCode"]);
+                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", replica, status.ExitCode);
                     }
 
                     // Remove the replica from the set

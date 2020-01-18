@@ -37,7 +37,8 @@ namespace Micronetes.Hosting.Infrastructure
             void RunDockerContainer(Dictionary<int, int> ports)
             {
                 var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                var status = service.Replicas[replica] = new ServiceReplica();
+                var status = new DockerStatus();
+                service.Replicas[replica] = status;
 
                 var hasPorts = ports?.Any() ?? false;
                 var portString = hasPorts ? string.Join(" ", ports.Select(p => $"-p {p.Value}:{p.Key}")) : "";
@@ -45,11 +46,11 @@ namespace Micronetes.Hosting.Infrastructure
                 var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage}";
                 logger.LogInformation("Running docker command {Command}", command);
 
-                status["dockerCommand"] = command;
+                status.DockerCommand = command;
 
                 if (hasPorts)
                 {
-                    status["ports"] = ports.Values;
+                    status.Ports = ports.Values;
                 }
 
                 var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
@@ -75,7 +76,7 @@ namespace Micronetes.Hosting.Infrastructure
 
                 var shortContainerId = containerId.Substring(0, Math.Min(12, containerId.Length));
 
-                status["containerId"] = shortContainerId;
+                status.ContainerId = shortContainerId;
 
                 logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
@@ -91,7 +92,7 @@ namespace Micronetes.Hosting.Infrastructure
                     },
                     onStart: pid =>
                     {
-                        status["logsPid"] = pid;
+                        status.DockerLogsPid = pid;
                     },
                     throwOnError: false,
                     cancellationToken: dockerInfo.StoppingTokenSource.Token);

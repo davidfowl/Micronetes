@@ -38,7 +38,7 @@ namespace Micronetes.Hosting
                 WriteIndented = true,
             };
 
-            options.Converters.Add(ServiceReplica.JsonConverter);
+            options.Converters.Add(ReplicaStatus.JsonConverter);
 
             using var host = Host.CreateDefaultBuilder(args)
                 .UseSerilog((context, configuration) =>
