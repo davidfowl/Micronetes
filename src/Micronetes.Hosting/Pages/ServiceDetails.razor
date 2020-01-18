@@ -1,0 +1,30 @@
+﻿@page "/services/{ServiceName}"
+@inject Application application
+
+@if (Service == null)
+{
+
+}
+else
+{
+    <h3>@Service.Description.Name</h3>
+
+}
+
+@code {
+    private Service _service;
+
+    [Parameter]
+    public string ServiceName { get; set; }
+
+    public Service Service => _service;
+
+    protected override void OnInitialized()
+    {
+        // TODO: handle this returning false
+        if (application.Services.TryGetValue(ServiceName, out _service))
+        {
+
+        }
+    }
+}

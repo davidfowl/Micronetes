@@ -17,9 +17,10 @@
     <tbody>
         @foreach (var service in application.Services)
         {
-            var logsPath = $"Logs/{service.Value.Description.Name}";
+            var logsPath = $"logs/{service.Value.Description.Name}";
+            var servicePath = $"services/{service.Value.Description.Name}";
             <tr>
-                <td>@service.Value.Description.Name</td>
+                <td><a href="@servicePath">@service.Value.Description.Name</a></td>
                 <td>
                     @if (service.Value.Description.Project != null)
                     {
