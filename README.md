@@ -94,11 +94,14 @@ You can use this to view basic information about running services and to see str
   replicas: number # number of times to launch the application
   external: bool # This service is external to avoid provisioning
   env: # environment variables
+   # - name: key
+   #   value: value
+   #   source: secret
   bindings: # array of bindings (ports, connection strings etc)
-    name: string # name of the binding
-    port: number # port of the binding
-    host: string # host of the binding
-    connectionString: # connection string of the binding
+    - name: string # name of the binding
+      port: number # port of the binding
+      host: string # host of the binding
+      connectionString: # connection string of the binding
 ```
 
 ### Service Descriptions
