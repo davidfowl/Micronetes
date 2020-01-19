@@ -14,9 +14,16 @@ namespace Micronetes.Hosting
     {
         private readonly JsonSerializerOptions _options;
 
-        public MicronetesApi(JsonSerializerOptions options)
+        public MicronetesApi()
         {
-            _options = options;
+            _options = new JsonSerializerOptions()
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
+            };
+
+            _options.Converters.Add(ReplicaStatus.JsonConverter);
         }
 
         public void MapRoutes(IEndpointRouteBuilder endpoints)

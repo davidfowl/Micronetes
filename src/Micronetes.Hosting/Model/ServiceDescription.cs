@@ -10,7 +10,7 @@ namespace Micronetes.Hosting.Model
         public bool External { get; set; }
         public string DockerImage { get; set; }
         public string Project { get; set; }
-        public bool Build { get; set; } = true;
+        public bool? Build { get; set; } = true;
         public string Executable { get; set; }
         public string WorkingDirectory { get; set; }
         public string Args { get; set; }

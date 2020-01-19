@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using Micronetes.Hosting;
 using Micronetes.Hosting.Model;
 using Newtonsoft.Json;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Micronetes.Host
 {
@@ -49,7 +51,15 @@ namespace Micronetes.Host
             {
             };
 
-            command.Handler = CommandHandler.Create<IConsole>((console) =>
+            var argument = new Argument("path")
+            {
+                Description = "A solution or project file to generate a yaml manifest from",
+                Arity = ArgumentArity.ZeroOrOne
+            };
+
+            command.AddArgument(argument);
+
+            command.Handler = CommandHandler.Create<IConsole, string>((console, path) =>
             {
                 if (File.Exists("m8s.yaml"))
                 {
@@ -57,7 +67,40 @@ namespace Micronetes.Host
                     return;
                 }
 
-                File.WriteAllText("m8s.yaml", @"- name: app
+                var template = "";
+
+                try
+                {
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        var application = ResolveApplication(path);
+                        var serializer = new SerializerBuilder()
+                            .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                            .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitDefaults)
+                            .Build();
+
+                        var extension = Path.GetExtension(application.Source).ToLowerInvariant();
+                        var directory = Path.GetDirectoryName(application.Source);
+                        var descriptions = application.Services.Select(s => s.Value.Description).ToList();
+
+                        // Clear all bindings if any for solutions and project files
+                        if (extension == ".sln" || extension == ".csproj" || extension == ".fsproj")
+                        {
+                            foreach (var d in descriptions)
+                            {
+                                d.Bindings = null;
+                                d.Replicas = null;
+                                d.Build = null;
+                                d.Configuration = null;
+                                d.Project = d.Project.Substring(directory.Length).TrimStart(Path.DirectorySeparatorChar);
+                            }
+                        }
+
+                        template = serializer.Serialize(descriptions);
+                    }
+                    else
+                    {
+                        template = @"- name: app
   # project: app.csproj # msbuild project path (relative to this file)
   # executable: app.exe # path to an executable (relative to this file)
   # args: --arg1=3 # arguments to pass to the process
@@ -67,7 +110,15 @@ namespace Micronetes.Host
   #    value: value
   # bindings: # optional array of bindings (ports, connection strings)
     # - port: 8080 # number port of the binding
-");
+";
+                    }
+                }
+                catch (FileNotFoundException)
+                {
+                    // No file found, just generate a new one
+                }
+
+                File.WriteAllText("m8s.yaml", template);
                 console.Out.WriteLine("Created \"m8s.yaml\"");
             });
 
@@ -144,7 +195,7 @@ namespace Micronetes.Host
 
             if (!File.Exists(path))
             {
-                throw new InvalidOperationException($"{path} does not exist");
+                throw new FileNotFoundException($"{path} does not exist");
             }
 
             switch (Path.GetExtension(path).ToLower())

@@ -94,7 +94,7 @@ namespace Micronetes.Hosting
                 Threads = new Thread[service.Description.Replicas.Value]
             };
 
-            if (service.Status.ProjectFilePath != null && service.Description.Build && _buildProjects)
+            if (service.Status.ProjectFilePath != null && service.Description.Build.GetValueOrDefault() && _buildProjects)
             {
                 _logger.LogInformation("Building project {ProjectFile}", service.Status.ProjectFilePath);
 

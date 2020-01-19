@@ -23,15 +23,6 @@ namespace Micronetes.Hosting
     {
         public static async Task RunAsync(Application application, string[] args)
         {
-            var options = new JsonSerializerOptions()
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true,
-            };
-
-            options.Converters.Add(ReplicaStatus.JsonConverter);
-
             using var host = Host.CreateDefaultBuilder(args)
                 .UseSerilog((context, configuration) =>
                 {
@@ -86,7 +77,7 @@ namespace Micronetes.Hosting
 
                         app.UseRouting();
 
-                        var api = new MicronetesApi(options);
+                        var api = new MicronetesApi();
 
                         app.UseEndpoints(endpoints =>
                         {
@@ -100,6 +91,9 @@ namespace Micronetes.Hosting
                 .Build();
 
             var logger = host.Services.GetRequiredService<ILogger<MicronetesHost>>();
+
+            logger.LogInformation("Executing application from  {Source}", application.Source);
+
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
