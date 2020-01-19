@@ -102,7 +102,7 @@ namespace Micronetes.Hosting
                     environmentArguments += $"-e {pair.Key}={pair.Value} ";
                 }
 
-                var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage}";
+                var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage} {service.Description.Args ?? ""}";
                 _logger.LogInformation("Running docker command {Command}", command);
 
                 status.DockerCommand = command;
