@@ -78,7 +78,7 @@ You can run the following commands
 
 You can also use a browser to view the dashboard:
 
-![image](https://user-images.githubusercontent.com/95136/72421513-7f7e4f00-3735-11ea-8763-53b6cd3724b4.png)
+![image](https://user-images.githubusercontent.com/95136/72678616-638feb80-3a5c-11ea-9241-0ee6ca50ca05.png)
 
 You can use this to view basic information about running services and to see streaming logs from each of them.
 
