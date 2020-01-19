@@ -83,13 +83,7 @@ namespace Micronetes.Hosting.Infrastructure
                 logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
-                    outputDataReceived: data =>
-                    {
-                        if (data != null)
-                        {
-                            service.Logs.OnNext(data);
-                        }
-                    },
+                    outputDataReceived: service.Logs.OnNext,
                     onStart: pid =>
                     {
                         status.DockerLogsPid = pid;
@@ -99,13 +93,28 @@ namespace Micronetes.Hosting.Infrastructure
 
                 logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
 
+                // Docker has a tendency to hang so we're going to timeout this shutdown process
+                var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
                 logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false);
+                result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+
+                if (result.ExitCode != 0)
+                {
+                    service.Logs.OnNext(result.StandardOutput);
+                    service.Logs.OnNext(result.StandardError);
+                }
 
                 logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
-                result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false);
+                result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+
+                if (result.ExitCode != 0)
+                {
+                    service.Logs.OnNext(result.StandardOutput);
+                    service.Logs.OnNext(result.StandardError);
+                }
 
                 logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
             };

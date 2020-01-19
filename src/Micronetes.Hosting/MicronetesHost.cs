@@ -491,7 +491,16 @@ namespace Micronetes.Hosting
 
             try
             {
-                await host.WaitForShutdownAsync();
+                var applicationLifetime = host.Services.GetService<IHostApplicationLifetime>();
+
+                var waitForStop = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+                applicationLifetime.ApplicationStopping.Register(obj =>
+                {
+                    var tcs = (TaskCompletionSource<object>)obj;
+                    tcs.TrySetResult(null);
+                }, waitForStop);
+
+                await waitForStop.Task;
 
                 logger.LogInformation("Shutting down...");
             }
@@ -499,6 +508,9 @@ namespace Micronetes.Hosting
             {
                 await target.StopAsync(application);
             }
+
+            // Stop the host after everything else has been shutdown
+            await host.StopAsync();
         }
     }
 }
