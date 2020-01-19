@@ -27,7 +27,7 @@ namespace Micronetes.Hosting
             // Shutdown in the opposite order
             foreach (var processor in _applicationProcessors.Reverse())
             {
-                await processor.StartAsync(application);
+                await processor.StopAsync(application);
             }
         }
     }
