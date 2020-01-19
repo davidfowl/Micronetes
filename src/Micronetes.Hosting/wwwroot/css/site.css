@@ -111,10 +111,12 @@ button.navbar-toggler {
     }
 
 .top-nav-item a {
-    padding-left: 3rem;
-    padding-right: 3rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
     text-decoration: none;
-    background: #3371e3;
+    background-color: #303030;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: .25rem;
 }
 
 .content {
