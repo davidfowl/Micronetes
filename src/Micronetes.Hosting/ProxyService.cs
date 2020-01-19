@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
-    public class ProxyService
+    public class ProxyService : IApplicationProcessor
     {
         private IHost _host;
         private readonly ILogger _logger;

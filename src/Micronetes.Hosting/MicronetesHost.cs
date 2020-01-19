@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -105,13 +106,15 @@ namespace Micronetes.Hosting
 
             var diagnosticOptions = DiagnosticOptions.FromConfiguration(configuration);
             var diagnosticsCollector = new DiagnosticsCollector(logger, diagnosticOptions);
-            var proxyService = new ProxyService(logger);
 
             // Print out what providers were selected and their values
             diagnosticOptions.DumpDiagnostics(logger);
 
-            var processTarget = new LocalExecutionTarget(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector);
-            var dockerTarget = new DockerExecutionTarget(logger);
+            var processors = new IApplicationProcessor[] {
+                new ProxyService(logger),
+                new DockerRunner(logger),
+                new ProcessRunner(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector),
+            };
 
             await host.StartAsync();
 
@@ -119,9 +122,10 @@ namespace Micronetes.Hosting
 
             try
             {
-                await proxyService.StartAsync(application);
-                await dockerTarget.StartAsync(application);
-                await processTarget.StartAsync(application);
+                foreach (var processor in processors)
+                {
+                    await processor.StartAsync(application);
+                }
             }
             catch (Exception ex)
             {
@@ -137,9 +141,11 @@ namespace Micronetes.Hosting
 
             try
             {
-                await processTarget.StopAsync(application);
-                await dockerTarget.StopAsync(application);
-                await proxyService.StopAsync(application);
+                // Shutdown in the opposite order
+                for (int i = processors.Length - 1; i >= 0; i--)
+                {
+                    await processors[i].StopAsync(application);
+                }
             }
             finally
             {

@@ -3,7 +3,7 @@ using Micronetes.Hosting.Model;
 
 namespace Micronetes.Hosting
 {
-    public interface IExecutionTarget
+    public interface IApplicationProcessor
     {
         Task StartAsync(Application application);
 

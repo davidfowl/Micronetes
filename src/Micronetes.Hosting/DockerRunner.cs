@@ -9,11 +9,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
-    public class DockerExecutionTarget : IExecutionTarget
+    public class DockerRunner : IApplicationProcessor
     {
         private readonly ILogger _logger;
 
-        public DockerExecutionTarget(ILogger logger)
+        public DockerRunner(ILogger logger)
         {
             _logger = logger;
         }
