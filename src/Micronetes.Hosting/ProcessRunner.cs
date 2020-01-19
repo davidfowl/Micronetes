@@ -98,13 +98,11 @@ namespace Micronetes.Hosting
             {
                 _logger.LogInformation("Building project {ProjectFile}", service.Status.ProjectFilePath);
 
-                service.Logs.OnNext("======================BUILDING====================");
+                service.Logs.OnNext($"dotnet build \"{service.Status.ProjectFilePath}\" /nologo");
 
                 var buildResult = ProcessUtil.Run("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
                                                  outputDataReceived: data => service.Logs.OnNext(data),
                                                  throwOnError: false);
-
-                service.Logs.OnNext("");
 
                 if (buildResult.ExitCode != 0)
                 {
@@ -180,10 +178,12 @@ namespace Micronetes.Hosting
 
                     try
                     {
+                        service.Logs.OnNext($"[{replica}]:{path} {args}");
+
                         var result = ProcessUtil.Run(path, args,
                             environmentVariables: environment,
                             workingDirectory: workingDirectory,
-                            outputDataReceived: data => service.Logs.OnNext("[" + replica + "]: " + data),
+                            outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
                             onStart: pid =>
                             {
                                 if (hasPorts)

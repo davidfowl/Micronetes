@@ -105,6 +105,8 @@ namespace Micronetes.Hosting
                 var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage} {service.Description.Args ?? ""}";
                 _logger.LogInformation("Running docker command {Command}", command);
 
+                service.Logs.OnNext($"[{replica}]: {command}");
+
                 status.DockerCommand = command;
 
                 var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
@@ -114,7 +116,7 @@ namespace Micronetes.Hosting
                     _logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
                     service.Replicas.TryRemove(replica, out _);
 
-                    service.Logs.OnNext("[" + replica + "]: " + result.StandardError);
+                    PrintStdOutAndErr(service, replica, result);
                     return;
                 }
 
@@ -139,7 +141,7 @@ namespace Micronetes.Hosting
                 _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
-                    outputDataReceived: data => service.Logs.OnNext("[" + replica + "]: " + data),
+                    outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
                     onStart: pid =>
                     {
                         status.DockerLogsPid = pid;
@@ -156,21 +158,13 @@ namespace Micronetes.Hosting
 
                 result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
-                if (result.ExitCode != 0)
-                {
-                    service.Logs.OnNext("[" + replica + "]: " + result.StandardOutput);
-                    service.Logs.OnNext("[" + replica + "]: " + result.StandardError);
-                }
+                PrintStdOutAndErr(service, replica, result);
 
                 _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
                 result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
-                if (result.ExitCode != 0)
-                {
-                    service.Logs.OnNext("[" + replica + "]: " + result.StandardOutput);
-                    service.Logs.OnNext("[" + replica + "]: " + result.StandardError);
-                }
+                PrintStdOutAndErr(service, replica, result);
 
                 _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
@@ -213,6 +207,22 @@ namespace Micronetes.Hosting
             service.Items[typeof(DockerInformation)] = dockerInfo;
 
             return Task.CompletedTask;
+        }
+
+        private static void PrintStdOutAndErr(Service service, string replica, ProcessResult result)
+        {
+            if (result.ExitCode != 0)
+            {
+                if (result.StandardOutput != null)
+                {
+                    service.Logs.OnNext($"[{replica}]: {result.StandardOutput}");
+                }
+
+                if (result.StandardError != null)
+                {
+                    service.Logs.OnNext($"[{replica}]: {result.StandardError}");
+                }
+            }
         }
 
         private void StopContainer(Service service)
