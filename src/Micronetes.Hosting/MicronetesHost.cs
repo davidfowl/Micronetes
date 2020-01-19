@@ -104,11 +104,11 @@ namespace Micronetes.Hosting
             // Print out what providers were selected and their values
             diagnosticOptions.DumpDiagnostics(logger);
 
-            var processors = new IApplicationProcessor[] {
+            var processor = new AggregateApplicationProcessor(new IApplicationProcessor[] {
                 new ProxyService(logger),
                 new DockerRunner(logger),
                 new ProcessRunner(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector),
-            };
+            });
 
             await host.StartAsync();
 
@@ -116,10 +116,7 @@ namespace Micronetes.Hosting
 
             try
             {
-                foreach (var processor in processors)
-                {
-                    await processor.StartAsync(application);
-                }
+                await processor.StartAsync(application);
             }
             catch (Exception ex)
             {
@@ -135,11 +132,7 @@ namespace Micronetes.Hosting
 
             try
             {
-                // Shutdown in the opposite order
-                for (int i = processors.Length - 1; i >= 0; i--)
-                {
-                    await processors[i].StopAsync(application);
-                }
+                await processor.StopAsync(application);
             }
             finally
             {
