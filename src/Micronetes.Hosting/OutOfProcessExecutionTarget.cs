@@ -15,12 +15,14 @@ namespace Micronetes.Hosting
     {
         private readonly ILogger _logger;
         private readonly bool _debugMode;
+        private readonly bool _buildProjects;
         private DiagnosticsCollector _diagnosticsCollector;
 
-        public OutOfProcessExecutionTarget(ILogger logger, bool debugMode = true)
+        public OutOfProcessExecutionTarget(ILogger logger, bool debugMode, bool buildProjects)
         {
             _logger = logger;
             _debugMode = debugMode;
+            _buildProjects = buildProjects;
             _diagnosticsCollector = new DiagnosticsCollector(logger);
         }
 
@@ -30,7 +32,7 @@ namespace Micronetes.Hosting
             var index = 0;
             foreach (var s in application.Services)
             {
-                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, s.Value);
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : Task.Run(() => LaunchService(application, s.Value));
             }
 
             return Task.WhenAll(tasks);
@@ -92,6 +94,25 @@ namespace Micronetes.Hosting
             {
                 Threads = new Thread[service.Description.Replicas.Value]
             };
+
+            if (service.Status.ProjectFilePath != null && service.Description.Build && _buildProjects)
+            {
+                _logger.LogInformation("Building project {ProjectFile}", service.Status.ProjectFilePath);
+
+                service.Logs.OnNext("======================BUILDING====================");
+
+                var buildResult = ProcessUtil.Run("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
+                                                 outputDataReceived: data => service.Logs.OnNext(data),
+                                                 throwOnError: false);
+
+                service.Logs.OnNext("");
+
+                if (buildResult.ExitCode != 0)
+                {
+                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
+                    return Task.CompletedTask;
+                }
+            }
 
             void RunApplication(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
@@ -165,15 +186,7 @@ namespace Micronetes.Hosting
                         var result = ProcessUtil.Run(path, args,
                             environmentVariables: environment,
                             workingDirectory: workingDirectory,
-                            outputDataReceived: data =>
-                            {
-                                if (data == null)
-                                {
-                                    return;
-                                }
-
-                                service.Logs.OnNext("[" + replica + "]: " + data);
-                            },
+                            outputDataReceived: data => service.Logs.OnNext("[" + replica + "]: " + data),
                             onStart: pid =>
                             {
                                 if (hasPorts)

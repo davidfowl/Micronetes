@@ -86,6 +86,13 @@ namespace Micronetes.Host
                 Arity = ArgumentArity.ZeroOrOne
             };
 
+            // TODO: We'll need to support a --build-args
+            command.AddOption(new Option("--no-build")
+            {
+                Description = "Do not build project files before running.",
+                Required = false
+            });
+
             command.AddOption(new Option("--port")
             {
                 Description = "The port to run control plane on.",

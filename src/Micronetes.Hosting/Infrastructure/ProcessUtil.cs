@@ -54,20 +54,26 @@ namespace Micronetes.Hosting
                 var outputBuilder = new StringBuilder();
                 process.OutputDataReceived += (_, e) =>
                 {
-                    if (outputDataReceived != null)
+                    if (e.Data != null)
                     {
-                        outputDataReceived.Invoke(e.Data);
-                    }
-                    else
-                    {
-                        outputBuilder.AppendLine(e.Data);
+                        if (outputDataReceived != null)
+                        {
+                            outputDataReceived.Invoke(e.Data);
+                        }
+                        else
+                        {
+                            outputBuilder.AppendLine(e.Data);
+                        }
                     }
                 };
 
                 var errorBuilder = new StringBuilder();
                 process.ErrorDataReceived += (_, e) =>
                 {
-                    errorBuilder.AppendLine(e.Data);
+                    if (e.Data != null)
+                    {
+                        errorBuilder.AppendLine(e.Data);
+                    }
                 };
 
                 process.Start();

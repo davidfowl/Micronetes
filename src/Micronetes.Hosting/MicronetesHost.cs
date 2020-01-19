@@ -358,7 +358,9 @@ namespace Micronetes.Hosting
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
-            var target = new OutOfProcessExecutionTarget(logger, args.Contains("--debug"));
+            var debugMode = args.Contains("--debug");
+            var buildProjects = !args.Contains("--no-build");
+            var target = new OutOfProcessExecutionTarget(logger, debugMode, buildProjects);
 
 
             static (string, string) GetProvider(IConfiguration configuration, string providerName)
