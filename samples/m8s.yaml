@@ -14,8 +14,3 @@
   bindings:
     - port: 5672
       protocol: rabbitmq
-- name: redis
-  dockerImage: redis
-  bindings:
-    - port: 6379
-      protocol: redis
