@@ -18,12 +18,12 @@ namespace Micronetes.Hosting
         private readonly bool _buildProjects;
         private DiagnosticsCollector _diagnosticsCollector;
 
-        public OutOfProcessExecutionTarget(ILogger logger, bool debugMode, bool buildProjects)
+        public OutOfProcessExecutionTarget(ILogger logger, OutOfProcessOptions options, DiagnosticsCollector diagnosticsCollector)
         {
             _logger = logger;
-            _debugMode = debugMode;
-            _buildProjects = buildProjects;
-            _diagnosticsCollector = new DiagnosticsCollector(logger);
+            _debugMode = options.DebugMode;
+            _buildProjects = options.BuildProjects;
+            _diagnosticsCollector = diagnosticsCollector;
         }
 
         public Task StartAsync(Application application)
@@ -171,8 +171,6 @@ namespace Micronetes.Hosting
                     var diagnosticsThread = new Thread(state =>
                     {
                         _diagnosticsCollector.ProcessEvents(
-                            application.ConfigureTracing,
-                            application.ConfigureLogging,
                             applicationName,
                             service.Description.Name,
                             (int)state,

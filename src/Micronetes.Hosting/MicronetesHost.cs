@@ -1,27 +1,18 @@
 using System;
-using System.Collections.Generic;
-using System.IO.Pipelines;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Connections;
-using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry.Trace.Configuration;
 using Serilog;
 using Serilog.Filters;
 
@@ -71,7 +62,6 @@ namespace Micronetes.Hosting
 
                     web.ConfigureKestrel(options =>
                     {
-                        var logger = options.ApplicationServices.GetRequiredService<ILogger<MicronetesHost>>();
                         var config = options.ApplicationServices.GetRequiredService<IConfiguration>();
 
                         if (config["port"] != null && int.TryParse(config["port"], out int cpPort))
@@ -85,132 +75,6 @@ namespace Micronetes.Hosting
                             // we should also allow ports to be specified as input
                             options.Listen(IPAddress.Loopback, 0);
                         }
-
-                        foreach (var service in application.Services.Values)
-                        {
-                            if (service.Description.External)
-                            {
-                                // We eventually want to proxy everything, this is temporary
-                                continue;
-                            }
-
-                            static int GetNextPort()
-                            {
-                                // Let the OS assign the next available port. Unless we cycle through all ports
-                                // on a test run, the OS will always increment the port number when making these calls.
-                                // This prevents races in parallel test runs where a test is already bound to
-                                // a given port, and a new test is able to bind to the same port due to port
-                                // reuse being enabled by default by the OS.
-                                using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                                socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-                                return ((IPEndPoint)socket.LocalEndPoint).Port;
-                            }
-
-                            foreach (var binding in service.Description.Bindings)
-                            {
-                                if (binding.Port == null)
-                                {
-                                    continue;
-                                }
-
-                                if (service.Description.Replicas == 1)
-                                {
-                                    // No need to proxy
-                                    service.PortMap[binding.Port.Value] = new List<int> { binding.Port.Value };
-                                    continue;
-                                }
-
-                                var ports = new List<int>();
-
-                                for (int i = 0; i < service.Description.Replicas; i++)
-                                {
-                                    // Reserve a port for each replica
-                                    var port = GetNextPort();
-                                    ports.Add(port);
-                                }
-
-                                logger.LogInformation("Mapping external port {ExternalPort} to internal port(s) {InternalPorts} for {ServiceName}", binding.Port, string.Join(", ", ports.Select(p => p.ToString())), service.Description.Name);
-
-                                service.PortMap[binding.Port.Value] = ports;
-
-                                options.Listen(IPAddress.Loopback, binding.Port.Value, o =>
-                                {
-                                    long count = 0;
-
-                                    // o.UseConnectionLogging("Micronetes.Proxy");
-
-                                    o.Run(async connection =>
-                                    {
-                                        var notificationFeature = connection.Features.Get<IConnectionLifetimeNotificationFeature>();
-
-                                        var next = (int)(Interlocked.Increment(ref count) % ports.Count);
-
-                                        NetworkStream targetStream = null;
-
-                                        try
-                                        {
-                                            var target = new Socket(SocketType.Stream, ProtocolType.Tcp)
-                                            {
-                                                NoDelay = true
-                                            };
-                                            var port = ports[next];
-
-                                            logger.LogDebug("Attempting to connect to {ServiceName} listening on {ExternalPort}:{Port}", service.Description.Name, binding.Port, port);
-
-                                            await target.ConnectAsync(IPAddress.Loopback, port);
-
-                                            logger.LogDebug("Successfully connected to {ServiceName} listening on {ExternalPort}:{Port}", service.Description.Name, binding.Port, port);
-
-                                            targetStream = new NetworkStream(target, ownsSocket: true);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            logger.LogDebug(ex, "Proxy error for service {ServiceName}", service.Description.Name);
-
-                                            await targetStream.DisposeAsync();
-
-                                            connection.Abort();
-                                            return;
-                                        }
-
-                                        try
-                                        {
-                                            logger.LogDebug("Proxying traffic to {ServiceName} {ExternalPort}:{InternalPort}", service.Description.Name, binding.Port, ports[next]);
-
-                                            // external -> internal
-                                            var reading = Task.Run(() => connection.Transport.Input.CopyToAsync(targetStream, notificationFeature.ConnectionClosedRequested));
-
-                                            // internal -> external
-                                            var writing = Task.Run(() => targetStream.CopyToAsync(connection.Transport.Output, notificationFeature.ConnectionClosedRequested));
-
-                                            await Task.WhenAll(reading, writing);
-                                        }
-                                        catch (ConnectionResetException)
-                                        {
-                                            // Connection was reset
-                                        }
-                                        catch (OperationCanceledException ex)
-                                        {
-                                            if (!notificationFeature.ConnectionClosedRequested.IsCancellationRequested)
-                                            {
-                                                logger.LogDebug(0, ex, "Proxy error for service {ServiceName}", service.Description.Name);
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            logger.LogDebug(0, ex, "Proxy error for service {ServiceName}", service.Description.Name);
-                                        }
-                                        finally
-                                        {
-                                            await targetStream.DisposeAsync();
-                                        }
-
-                                        // This needs to reconnect to the target port(s) until its bound
-                                        // it has to stop if the service is no longer running
-                                    });
-                                });
-                            }
-                        }
                     });
 
                     web.Configure(app =>
@@ -221,131 +85,11 @@ namespace Micronetes.Hosting
 
                         app.UseRouting();
 
+                        var api = new MicronetesApi(options);
+
                         app.UseEndpoints(endpoints =>
                         {
-                            endpoints.Map("/api/v1", context =>
-                            {
-                                context.Response.ContentType = "application/json";
-                                return JsonSerializer.SerializeAsync(context.Response.Body, new[]
-                                {
-                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/services",
-                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/logs/{{service}}",
-                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/metrics",
-                                    $"{context.Request.Scheme}://{context.Request.Host}/api/v1/metrics/{{service}}",
-                                },
-                                options);
-                            });
-
-                            endpoints.MapGet("/api/v1/services", async context =>
-                            {
-                                context.Response.ContentType = "application/json";
-
-                                var services = application.Services.OrderBy(s => s.Key).Select(s => s.Value);
-
-                                await JsonSerializer.SerializeAsync(context.Response.Body, services, options);
-                            });
-
-                            endpoints.MapGet("/api/v1/services/{name}", async context =>
-                            {
-                                var name = (string)context.Request.RouteValues["name"];
-                                context.Response.ContentType = "application/json";
-
-                                if (!application.Services.TryGetValue(name, out var service))
-                                {
-                                    context.Response.StatusCode = 404;
-                                    await JsonSerializer.SerializeAsync(context.Response.Body, new
-                                    {
-                                        message = $"Unknown service {name}"
-                                    },
-                                    options);
-
-                                    return;
-                                }
-
-                                await JsonSerializer.SerializeAsync(context.Response.Body, service, options);
-                            });
-
-                            endpoints.MapGet("/api/v1/logs/{name}", async context =>
-                            {
-                                var name = (string)context.Request.RouteValues["name"];
-                                context.Response.ContentType = "application/json";
-
-                                if (!application.Services.TryGetValue(name, out var service))
-                                {
-                                    context.Response.StatusCode = 404;
-                                    await JsonSerializer.SerializeAsync(context.Response.Body, new
-                                    {
-                                        message = $"Unknown service {name}"
-                                    },
-                                    options);
-
-                                    return;
-                                }
-
-                                await JsonSerializer.SerializeAsync(context.Response.Body, service.CachedLogs, options);
-                            });
-
-                            endpoints.MapGet("/api/v1/metrics", async context =>
-                            {
-                                var sb = new StringBuilder();
-                                foreach (var s in application.Services.OrderBy(s => s.Key))
-                                {
-                                    sb.AppendLine($"# {s.Key}");
-                                    foreach (var replica in s.Value.Replicas)
-                                    {
-                                        foreach (var metric in replica.Value.Metrics)
-                                        {
-                                            sb.Append(metric.Key);
-                                            sb.Append("{");
-                                            sb.Append($"service=\"{s.Key}\",");
-                                            sb.Append($"instance=\"{replica.Key}\"");
-                                            sb.Append("}");
-                                            sb.Append(" ");
-                                            sb.Append(metric.Value);
-                                            sb.AppendLine();
-                                        }
-                                    }
-                                    sb.AppendLine();
-                                }
-
-                                await context.Response.WriteAsync(sb.ToString());
-                            });
-
-                            endpoints.MapGet("/api/v1/metrics/{name}", async context =>
-                            {
-                                var sb = new StringBuilder();
-
-                                var name = (string)context.Request.RouteValues["name"];
-                                context.Response.ContentType = "application/json";
-
-                                if (!application.Services.TryGetValue(name, out var service))
-                                {
-                                    context.Response.StatusCode = 404;
-                                    await JsonSerializer.SerializeAsync(context.Response.Body, new
-                                    {
-                                        message = $"Unknown service {name}"
-                                    },
-                                    options);
-
-                                    return;
-                                }
-
-                                foreach (var replica in service.Replicas)
-                                {
-                                    foreach (var metric in replica.Value.Metrics)
-                                    {
-                                        sb.Append(metric.Key);
-                                        sb.Append("{");
-                                        sb.Append($"instance=\"{replica.Key}\"");
-                                        sb.Append("}");
-                                        sb.Append(" ");
-                                        sb.Append(metric.Value);
-                                        sb.AppendLine();
-                                    }
-                                }
-
-                                await context.Response.WriteAsync(sb.ToString());
-                            });
+                            api.MapRoutes(endpoints);
 
                             endpoints.MapBlazorHub();
                             endpoints.MapFallbackToPage("/_Host");
@@ -358,123 +102,15 @@ namespace Micronetes.Hosting
             var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
             var configuration = host.Services.GetRequiredService<IConfiguration>();
             var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
-            var debugMode = args.Contains("--debug");
-            var buildProjects = !args.Contains("--no-build");
-            var target = new OutOfProcessExecutionTarget(logger, debugMode, buildProjects);
 
+            var diagnosticOptions = DiagnosticOptions.FromConfiguration(configuration);
+            var diagnosticsCollector = new DiagnosticsCollector(logger, diagnosticOptions);
+            var proxyService = new ProxyService(logger);
 
-            static (string, string) GetProvider(IConfiguration configuration, string providerName)
-            {
-                var providerString = configuration[providerName];
+            // Print out what providers were selected and their values
+            diagnosticOptions.DumpDiagnostics(logger);
 
-                if (string.IsNullOrEmpty(providerString))
-                {
-                    return (null, null);
-                }
-
-                var pair = providerString.Split('=');
-
-                if (pair.Length < 2)
-                {
-                    return (pair[0].Trim(), null);
-                }
-
-                return (pair[0].Trim(), pair[1].Trim());
-            }
-
-            var (logProviderKey, logProviderValue) = GetProvider(configuration, "logs");
-            var (dTraceProviderKey, dTraceProviderValue) = GetProvider(configuration, "dtrace");
-
-            switch (logProviderKey?.ToLowerInvariant())
-            {
-                case "elastic":
-                    logger.LogInformation("logs: Using ElasticSearch at {URL}", logProviderValue);
-                    break;
-                case "ai":
-                    logger.LogInformation("logs: Using ApplicationInsights instrumentation key {InstrumentationKey}", logProviderValue);
-                    break;
-                case "console":
-                    logger.LogInformation("logs: Using console logs");
-                    break;
-                case "seq":
-                    logger.LogInformation("logs: Using Seq at {URL}", logProviderValue);
-                    break;
-                default:
-                    break;
-            }
-
-            switch (dTraceProviderKey?.ToLowerInvariant())
-            {
-                case "zipkin":
-                    logger.LogInformation("dtrace: Using Zipkin at URL {URL}", dTraceProviderValue);
-                    break;
-                default:
-                    break;
-            }
-
-            // This is the logger factory for application logs. It allows re-routing event pipe collected logs (structured logs)
-            // to any of the supported sinks, currently (elastic search and app insights)
-            application.ConfigureLogging = (serviceName, replicaName, builder) =>
-            {
-                if (string.Equals(logProviderKey, "elastic", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrEmpty(logProviderValue))
-                {
-                    var loggerConfiguration = new LoggerConfiguration()
-                                                .Enrich.WithProperty("Application", serviceName)
-                                                .Enrich.WithProperty("Instance", replicaName)
-                                                .Enrich.FromLogContext()
-                                                .WriteTo.Elasticsearch(logProviderValue);
-
-                    builder.AddSerilog(loggerConfiguration.CreateLogger());
-                }
-
-                if (string.Equals(logProviderKey, "console", StringComparison.OrdinalIgnoreCase))
-                {
-                    var loggerConfiguration = new LoggerConfiguration()
-                                                .Enrich.WithProperty("Application", serviceName)
-                                                .Enrich.WithProperty("Instance", replicaName)
-                                                .Enrich.FromLogContext()
-                                                .WriteTo.Console(outputTemplate: "[{Instance}]: [{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
-
-                    builder.AddSerilog(loggerConfiguration.CreateLogger());
-                }
-
-                if (string.Equals(logProviderKey, "seq", StringComparison.OrdinalIgnoreCase))
-                {
-                    var loggerConfiguration = new LoggerConfiguration()
-                                                .Enrich.WithProperty("Application", serviceName)
-                                                .Enrich.WithProperty("Instance", replicaName)
-                                                .Enrich.FromLogContext()
-                                                .WriteTo.Seq(logProviderValue);
-
-                    builder.AddSerilog(loggerConfiguration.CreateLogger());
-                }
-
-                if (string.Equals(logProviderKey, "ai", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrEmpty(logProviderValue))
-                {
-                    builder.AddApplicationInsights(logProviderValue);
-                }
-
-                // REVIEW: How are log levels controlled on the outside?
-                builder.SetMinimumLevel(LogLevel.Information);
-            };
-
-            application.ConfigureTracing = (serviceName, replicaName, builder) =>
-            {
-                if (string.Equals(dTraceProviderKey, "zipkin", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrEmpty(dTraceProviderValue))
-                {
-                    builder.UseZipkin(options =>
-                    {
-                        options.ServiceName = serviceName;
-                        options.Endpoint = new Uri($"{dTraceProviderValue}/api/v2/spans");
-                    });
-                }
-
-                // TODO: Support Jaegar
-                // TODO: Support ApplicationInsights
-            };
+            var target = new OutOfProcessExecutionTarget(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector);
 
             await host.StartAsync();
 
@@ -482,6 +118,7 @@ namespace Micronetes.Hosting
 
             try
             {
+                await proxyService.StartAsync(application);
                 await target.StartAsync(application);
             }
             catch (Exception ex)
@@ -489,28 +126,23 @@ namespace Micronetes.Hosting
                 logger.LogError(0, ex, "Failed to launch application");
             }
 
+            var waitForStop = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lifetime.ApplicationStopping.Register(obj => waitForStop.TrySetResult(null), null);
+
+            await waitForStop.Task;
+
+            logger.LogInformation("Shutting down...");
+
             try
             {
-                var applicationLifetime = host.Services.GetService<IHostApplicationLifetime>();
-
-                var waitForStop = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-                applicationLifetime.ApplicationStopping.Register(obj =>
-                {
-                    var tcs = (TaskCompletionSource<object>)obj;
-                    tcs.TrySetResult(null);
-                }, waitForStop);
-
-                await waitForStop.Task;
-
-                logger.LogInformation("Shutting down...");
+                await target.StopAsync(application);
+                await proxyService.StopAsync(application);
             }
             finally
             {
-                await target.StopAsync(application);
+                // Stop the host after everything else has been shutdown
+                await host.StopAsync();
             }
-
-            // Stop the host after everything else has been shutdown
-            await host.StopAsync();
         }
     }
 }
