@@ -5,12 +5,10 @@ using System.CommandLine.Invocation;
 using System.CommandLine.Rendering;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
 using Micronetes.Hosting;
 using Micronetes.Hosting.Model;
-using Newtonsoft.Json;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
