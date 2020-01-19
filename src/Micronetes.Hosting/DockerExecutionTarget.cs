@@ -82,7 +82,7 @@ namespace Micronetes.Hosting
                 {
                     status.Ports = ports.Select(p => p.Port);
 
-                    portString = string.Join(" ", ports.Select(p => $"-p {p.BindingPort}:{p.Port}"));
+                    portString = string.Join(" ", ports.Select(p => $"-p {p.Port}:{p.Port}"));
 
                     // These ports should also be passed in not assuming ASP.NET Core
                     environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"{p.Protocol ?? "http"}://*:{p.Port}"));
@@ -114,7 +114,7 @@ namespace Micronetes.Hosting
                     _logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
                     service.Replicas.TryRemove(replica, out _);
 
-                    service.Logs.OnNext(result.StandardError);
+                    service.Logs.OnNext("[" + replica + "]: " + result.StandardError);
                     return;
                 }
 
@@ -139,7 +139,7 @@ namespace Micronetes.Hosting
                 _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
-                    outputDataReceived: service.Logs.OnNext,
+                    outputDataReceived: data => service.Logs.OnNext("[" + replica + "]: " + data),
                     onStart: pid =>
                     {
                         status.DockerLogsPid = pid;
@@ -158,8 +158,8 @@ namespace Micronetes.Hosting
 
                 if (result.ExitCode != 0)
                 {
-                    service.Logs.OnNext(result.StandardOutput);
-                    service.Logs.OnNext(result.StandardError);
+                    service.Logs.OnNext("[" + replica + "]: " + result.StandardOutput);
+                    service.Logs.OnNext("[" + replica + "]: " + result.StandardError);
                 }
 
                 _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
@@ -168,8 +168,8 @@ namespace Micronetes.Hosting
 
                 if (result.ExitCode != 0)
                 {
-                    service.Logs.OnNext(result.StandardOutput);
-                    service.Logs.OnNext(result.StandardError);
+                    service.Logs.OnNext("[" + replica + "]: " + result.StandardOutput);
+                    service.Logs.OnNext("[" + replica + "]: " + result.StandardError);
                 }
 
                 _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
