@@ -110,7 +110,8 @@ namespace Micronetes.Hosting
             // Print out what providers were selected and their values
             diagnosticOptions.DumpDiagnostics(logger);
 
-            var target = new OutOfProcessExecutionTarget(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector);
+            var processTarget = new LocalExecutionTarget(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector);
+            var dockerTarget = new DockerExecutionTarget(logger);
 
             await host.StartAsync();
 
@@ -119,7 +120,8 @@ namespace Micronetes.Hosting
             try
             {
                 await proxyService.StartAsync(application);
-                await target.StartAsync(application);
+                await dockerTarget.StartAsync(application);
+                await processTarget.StartAsync(application);
             }
             catch (Exception ex)
             {
@@ -135,7 +137,8 @@ namespace Micronetes.Hosting
 
             try
             {
-                await target.StopAsync(application);
+                await processTarget.StopAsync(application);
+                await dockerTarget.StopAsync(application);
                 await proxyService.StopAsync(application);
             }
             finally

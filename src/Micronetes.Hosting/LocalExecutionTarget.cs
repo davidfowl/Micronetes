@@ -5,20 +5,19 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Micronetes.Hosting.Infrastructure;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
-    public class OutOfProcessExecutionTarget : IExecutionTarget
+    public class LocalExecutionTarget : IExecutionTarget
     {
         private readonly ILogger _logger;
         private readonly bool _debugMode;
         private readonly bool _buildProjects;
         private DiagnosticsCollector _diagnosticsCollector;
 
-        public OutOfProcessExecutionTarget(ILogger logger, OutOfProcessOptions options, DiagnosticsCollector diagnosticsCollector)
+        public LocalExecutionTarget(ILogger logger, OutOfProcessOptions options, DiagnosticsCollector diagnosticsCollector)
         {
             _logger = logger;
             _debugMode = options.DebugMode;
@@ -49,7 +48,7 @@ namespace Micronetes.Hosting
 
             if (serviceDescription.DockerImage != null)
             {
-                return Docker.RunAsync(_logger, service);
+                return Task.CompletedTask;
             }
 
             var serviceName = serviceDescription.Name;
@@ -281,10 +280,6 @@ namespace Micronetes.Hosting
                     {
                         t.Join();
                     }
-                }
-                else if (service.Description.DockerImage != null)
-                {
-                    Docker.Stop(service);
                 }
             }
 

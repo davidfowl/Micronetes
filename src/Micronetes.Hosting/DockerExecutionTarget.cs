@@ -7,11 +7,45 @@ using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
-namespace Micronetes.Hosting.Infrastructure
+namespace Micronetes.Hosting
 {
-    internal class Docker
+    public class DockerExecutionTarget : IExecutionTarget
     {
-        public static Task RunAsync(ILogger logger, Service service)
+        private readonly ILogger _logger;
+
+        public DockerExecutionTarget(ILogger logger)
+        {
+            _logger = logger;
+        }
+
+        public Task StartAsync(Application application)
+        {
+            var tasks = new Task[application.Services.Count];
+            var index = 0;
+            foreach (var s in application.Services)
+            {
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : StartContainerAsync(application, s.Value);
+            }
+
+            return Task.WhenAll(tasks);
+        }
+
+        public Task StopAsync(Application application)
+        {
+            var services = application.Services;
+
+            var index = 0;
+            var tasks = new Task[services.Count];
+            foreach (var s in services.Values)
+            {
+                var state = s;
+                tasks[index++] = Task.Run(() => StopContainer(state));
+            }
+
+            return Task.WhenAll(tasks);
+        }
+
+        private Task StartContainerAsync(Application application, Service service)
         {
             if (service.Description.DockerImage == null)
             {
@@ -21,44 +55,66 @@ namespace Micronetes.Hosting.Infrastructure
             var serviceDescription = service.Description;
             var environmentArguments = "";
 
-            if (serviceDescription.Configuration != null)
-            {
-                foreach (var env in serviceDescription.Configuration)
-                {
-                    environmentArguments += $"--env {env.Name}={env.Value} ";
-                }
-            }
-
             var dockerInfo = new DockerInformation()
             {
                 Threads = new Thread[service.Description.Replicas.Value]
             };
 
-            void RunDockerContainer(Dictionary<int, int> ports)
+            void RunDockerContainer(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
+                var hasPorts = ports.Any();
+
                 var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
                 var status = new DockerStatus();
                 service.Replicas[replica] = status;
 
-                var hasPorts = ports?.Any() ?? false;
-                var portString = hasPorts ? string.Join(" ", ports.Select(p => $"-p {p.Value}:{p.Key}")) : "";
+                var environment = new Dictionary<string, string>
+                {
+                    // Default to development environment
+                    ["DOTNET_ENVIRONMENT"] = "Development",
+                    // Remove the color codes from the console output
+                    ["DOTNET_LOGGING__CONSOLE__DISABLECOLORS"] = "true"
+                };
 
-                var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage}";
-                logger.LogInformation("Running docker command {Command}", command);
-
-                status.DockerCommand = command;
+                var portString = "";
 
                 if (hasPorts)
                 {
-                    status.Ports = ports.Values;
+                    status.Ports = ports.Select(p => p.Port);
+
+                    portString = string.Join(" ", ports.Select(p => $"-p {p.BindingPort}:{p.Port}"));
+
+                    // These ports should also be passed in not assuming ASP.NET Core
+                    environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"{p.Protocol ?? "http"}://*:{p.Port}"));
+
+                    foreach (var p in ports)
+                    {
+                        environment[$"{p.Protocol?.ToUpper() ?? "HTTP"}_PORT"] = p.BindingPort.ToString();
+                    }
                 }
+
+                application.PopulateEnvironment(service, (key, value) => environment[key] = value, "host.docker.internal");
+
+                environment["APP_INSTANCE"] = replica;
+
+                foreach (var pair in environment)
+                {
+                    environmentArguments += $"-e {pair.Key}={pair.Value} ";
+                }
+
+                var command = $"run -d {environmentArguments} {portString} --name {replica} --restart=unless-stopped {service.Description.DockerImage}";
+                _logger.LogInformation("Running docker command {Command}", command);
+
+                status.DockerCommand = command;
 
                 var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
+                    _logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
                     service.Replicas.TryRemove(replica, out _);
+
+                    service.Logs.OnNext(result.StandardError);
                     return;
                 }
 
@@ -78,9 +134,9 @@ namespace Micronetes.Hosting.Infrastructure
 
                 status.ContainerId = shortContainerId;
 
-                logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
+                _logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
+                _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
                     outputDataReceived: service.Logs.OnNext,
@@ -91,12 +147,12 @@ namespace Micronetes.Hosting.Infrastructure
                     throwOnError: false,
                     cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
-                logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
+                _logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
 
                 // Docker has a tendency to hang so we're going to timeout this shutdown process
                 var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-                logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
+                _logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
                 result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
@@ -106,7 +162,7 @@ namespace Micronetes.Hosting.Infrastructure
                     service.Logs.OnNext(result.StandardError);
                 }
 
-                logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
                 result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
@@ -116,7 +172,9 @@ namespace Micronetes.Hosting.Infrastructure
                     service.Logs.OnNext(result.StandardError);
                 }
 
-                logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+
+                service.Replicas.TryRemove(replica, out _);
             };
 
             if (serviceDescription.Bindings.Count > 0)
@@ -125,7 +183,7 @@ namespace Micronetes.Hosting.Infrastructure
                 // port
                 for (int i = 0; i < serviceDescription.Replicas; i++)
                 {
-                    var ports = new Dictionary<int, int>();
+                    var ports = new List<(int, int, string)>();
                     foreach (var binding in serviceDescription.Bindings)
                     {
                         if (binding.Port == null)
@@ -133,7 +191,7 @@ namespace Micronetes.Hosting.Infrastructure
                             continue;
                         }
 
-                        ports[binding.Port.Value] = service.PortMap[binding.Port.Value][i];
+                        ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
                     dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(ports));
@@ -157,7 +215,7 @@ namespace Micronetes.Hosting.Infrastructure
             return Task.CompletedTask;
         }
 
-        public static void Stop(Service service)
+        private void StopContainer(Service service)
         {
             if (service.Items.TryGetValue(typeof(DockerInformation), out var value) && value is DockerInformation di)
             {

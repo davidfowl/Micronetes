@@ -8,6 +8,7 @@
         <tr>
             <th>Name</th>
             <th>Type</th>
+            <th>Source</th>
             <th>Bindings</th>
             <th>Replicas</th>
             <th>Restarts</th>
@@ -21,6 +22,9 @@
             var servicePath = $"services/{service.Value.Description.Name}";
             <tr>
                 <td><a href="@servicePath">@service.Value.Description.Name</a></td>
+                <td>
+                    @service.Value.ServiceType
+                </td>
                 <td>
                     @if (service.Value.Description.Project != null)
                     {
@@ -59,7 +63,7 @@
                         <p>none</p>
                     }
                 </td>
-                <td>@service.Value.Description.Replicas</td>
+                <td>@service.Value.Replicas.Count/@service.Value.Description.Replicas</td>
                 <td>@service.Value.Restarts</td>
                 <td>
                     <NavLink href="@logsPath">View</NavLink>

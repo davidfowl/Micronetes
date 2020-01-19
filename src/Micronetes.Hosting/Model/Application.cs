@@ -177,7 +177,7 @@ namespace Micronetes.Hosting.Model
 
         public Dictionary<string, Service> Services { get; }
 
-        internal void PopulateEnvironment(Service service, Action<string, string> set)
+        internal void PopulateEnvironment(Service service, Action<string, string> set, string defaultHost = "localhost")
         {
             if (service.Description.Configuration != null)
             {
@@ -223,8 +223,8 @@ namespace Micronetes.Hosting.Model
                     set($"{envName}_SERVICE_PORT", b.Port.ToString());
                 }
 
-                set($"SERVICE__{configName}__HOST", b.Host ?? "localhost");
-                set($"{envName}_SERVICE_HOST", b.Host ?? "localhost");
+                set($"SERVICE__{configName}__HOST", b.Host ?? defaultHost);
+                set($"{envName}_SERVICE_HOST", b.Host ?? defaultHost);
             }
 
             // Inject dependency information
