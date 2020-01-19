@@ -5,10 +5,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Micronetes\Micronetes.csproj" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.26.0" />
+    <PackageReference Include="protobuf-net.Grpc" Version="1.0.21" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Micronetes.Abstractions\Micronetes.Abstractions.csproj" />
     <ProjectReference Include="..\Shared.Contracts\Shared.Contracts.csproj" />
   </ItemGroup>
-
-
-
 </Project>

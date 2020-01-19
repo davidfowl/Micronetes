@@ -32,7 +32,7 @@ namespace Micronetes.Hosting
             var index = 0;
             foreach (var s in application.Services)
             {
-                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : Task.Run(() => LaunchService(application, s.Value));
+                tasks[index++] = s.Value.Description.External ? Task.CompletedTask : LaunchService(application, s.Value);
             }
 
             return Task.WhenAll(tasks);

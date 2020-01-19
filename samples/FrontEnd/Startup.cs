@@ -1,13 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using ProtoBuf.Grpc.Client;
+using Shared.Contracts;
 
 namespace FrontEnd
 {
@@ -24,6 +22,10 @@ namespace FrontEnd
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddRazorPages();
+
+            var address = Configuration.GetUri("backend");
+
+            services.AddSingleton(_ => GrpcChannel.ForAddress(address).CreateGrpcService<IOrderService>());
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

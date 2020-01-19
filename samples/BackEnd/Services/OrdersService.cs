@@ -1,6 +1,5 @@
 ﻿using System.Text.Json;
 using System.Threading.Tasks;
-using Micronetes;
 using RabbitMQ.Client;
 using Shared.Contracts;
 
@@ -8,26 +7,18 @@ namespace BackEnd.Services
 {
     public class OrdersService : IOrderService
     {
-        private readonly IClientFactory<IModel> _clientFactory;
+        private readonly IModel _client;
 
-        public OrdersService(IClientFactory<IModel> clientFactory)
+        public OrdersService(IModel client)
         {
-            _clientFactory = clientFactory;
+            _client = client;
         }
 
         public ValueTask PlaceOrderAsync(Order order)
         {
-            var channel = _clientFactory.CreateClient("rabbit");
-
-            channel.QueueDeclare(queue: "orders",
-                                     durable: false,
-                                     exclusive: false,
-                                     autoDelete: false,
-                                     arguments: null);
-
             var orderBytes = JsonSerializer.SerializeToUtf8Bytes(order);
 
-            channel.BasicPublish(exchange: "",
+            _client.BasicPublish(exchange: "",
                                      routingKey: "orders",
                                      basicProperties: null,
                                      body: orderBytes);

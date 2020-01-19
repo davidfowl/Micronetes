@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using ProtoBuf.Grpc.Server;
+using RabbitMQ.Client;
 
 namespace BackEnd
 {
@@ -31,6 +32,25 @@ namespace BackEnd
             services.AddAuthorization();
 
             services.AddCodeFirstGrpc();
+
+            services.AddSingleton(sp =>
+            {
+                var uri = Configuration.GetUri("rabbit");
+                var factory = new ConnectionFactory()
+                {
+                    HostName = uri.Host,
+                    Port = uri.Port
+                };
+                var connection = factory.CreateConnection();
+                var channel = connection.CreateModel();
+
+                channel.QueueDeclare(queue: "orders",
+                                     durable: false,
+                                     exclusive: false,
+                                     autoDelete: false,
+                                     arguments: null);
+                return channel;
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -2,6 +2,7 @@
 using Micronetes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using ProtoBuf.Grpc.Client;
 
 namespace FrontEnd
 {
@@ -9,12 +10,13 @@ namespace FrontEnd
     {
         public static void Main(string[] args)
         {
+            GrpcClientFactory.AllowUnencryptedHttp2 = true;
+
             CreateHostBuilder(args).Build().Run();
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-            .UseMicronetes()
             .ConfigureWebHostDefaults(web =>
             {
                 web.UseStartup<Startup>();

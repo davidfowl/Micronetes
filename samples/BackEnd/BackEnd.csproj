@@ -5,11 +5,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Micronetes\Micronetes.csproj" />
+    <ProjectReference Include="..\..\src\Micronetes.Abstractions\Micronetes.Abstractions.csproj" />
     <ProjectReference Include="..\Shared.Contracts\Shared.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="5.1.2" />
     <PackageReference Include="protobuf-net.Grpc.AspNetCore" Version="1.0.21" />
   </ItemGroup>
 
