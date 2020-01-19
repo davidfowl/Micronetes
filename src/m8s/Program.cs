@@ -65,7 +65,17 @@ namespace Micronetes.Host
                     return;
                 }
 
-                var template = "";
+                var template = @"- name: app
+  # project: app.csproj # msbuild project path (relative to this file)
+  # executable: app.exe # path to an executable (relative to this file)
+  # args: --arg1=3 # arguments to pass to the process
+  # replicas: 5 # number of times to launch the application
+  # env: # array of environment variables
+  #  - name: key
+  #    value: value
+  # bindings: # optional array of bindings (ports, connection strings)
+    # - port: 8080 # number port of the binding
+";
 
                 try
                 {
@@ -95,20 +105,6 @@ namespace Micronetes.Host
                         }
 
                         template = serializer.Serialize(descriptions);
-                    }
-                    else
-                    {
-                        template = @"- name: app
-  # project: app.csproj # msbuild project path (relative to this file)
-  # executable: app.exe # path to an executable (relative to this file)
-  # args: --arg1=3 # arguments to pass to the process
-  # replicas: 5 # number of times to launch the application
-  # env: # array of environment variables
-  #  - name: key
-  #    value: value
-  # bindings: # optional array of bindings (ports, connection strings)
-    # - port: 8080 # number port of the binding
-";
                     }
                 }
                 catch (FileNotFoundException)
