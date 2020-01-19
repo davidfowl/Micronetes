@@ -201,7 +201,7 @@ namespace Micronetes.Hosting
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(null));
+                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(Enumerable.Empty<(int, int, string)>()));
                 }
             }
 
