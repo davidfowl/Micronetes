@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using Micronetes.Hosting;
 using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Metrics;
 using Micronetes.Hosting.Model;
@@ -17,6 +18,7 @@ using Microsoft.Extensions.Logging.EventSource;
 using Microsoft.Hosting.Logging;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Trace.Configuration;
+using Serilog;
 
 namespace Micronetes.Hosting
 {
@@ -58,16 +60,16 @@ namespace Micronetes.Hosting
 
         "\"";
 
-        private readonly ILogger _logger;
+        private readonly Microsoft.Extensions.Logging.ILogger _logger;
+        private readonly DiagnosticOptions _options;
 
-        public DiagnosticsCollector(ILogger logger)
+        public DiagnosticsCollector(Microsoft.Extensions.Logging.ILogger logger, DiagnosticOptions options)
         {
             _logger = logger;
+            _options = options;
         }
 
-        public void ProcessEvents(Action<string, string, TracerBuilder> configureTracing,
-                                  Action<string, string, ILoggingBuilder> configureLogging,
-                                  string applicationName,
+        public void ProcessEvents(string applicationName,
                                   string serviceName,
                                   int processId,
                                   string replicaName,
@@ -101,7 +103,7 @@ namespace Micronetes.Hosting
             _logger.LogInformation("Listening for event pipe events for {ServiceName} on process id {PID}", replicaName, processId);
 
             // Create the logger factory for this replica
-            using var loggerFactory = LoggerFactory.Create(builder => configureLogging(serviceName, replicaName, builder));
+            using var loggerFactory = LoggerFactory.Create(builder => ConfigureLogging(serviceName, replicaName, builder));
 
             // Create the tracer for this replica
             Tracer tracer = null;
@@ -114,7 +116,7 @@ namespace Micronetes.Hosting
                     return t;
                 });
 
-                configureTracing(serviceName, replicaName, builder);
+                ConfigureTracing(serviceName, replicaName, builder);
             });
 
             var providers = new List<EventPipeProvider>()
@@ -534,6 +536,74 @@ namespace Micronetes.Hosting
             }
 
             _logger.LogInformation("Event pipe collection completed for {ServiceName} on process id {PID}", replicaName, processId);
+        }
+
+        // This is the logger factory for application logs. It allows re-routing event pipe collected logs (structured logs)
+        // to any of the supported sinks, currently (elastic search and app insights)
+        private void ConfigureLogging(string serviceName, string replicaName, ILoggingBuilder builder)
+        {
+            var logProviderKey = _options.LoggingProvider.Key;
+            var logProviderValue = _options.LoggingProvider.Value;
+
+            if (string.Equals(logProviderKey, "elastic", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(logProviderValue))
+            {
+                var loggerConfiguration = new LoggerConfiguration()
+                                            .Enrich.WithProperty("Application", serviceName)
+                                            .Enrich.WithProperty("Instance", replicaName)
+                                            .Enrich.FromLogContext()
+                                            .WriteTo.Elasticsearch(logProviderValue);
+
+                builder.AddSerilog(loggerConfiguration.CreateLogger());
+            }
+
+            if (string.Equals(logProviderKey, "console", StringComparison.OrdinalIgnoreCase))
+            {
+                var loggerConfiguration = new LoggerConfiguration()
+                                            .Enrich.WithProperty("Application", serviceName)
+                                            .Enrich.WithProperty("Instance", replicaName)
+                                            .Enrich.FromLogContext()
+                                            .WriteTo.Console(outputTemplate: "[{Instance}]: [{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+                builder.AddSerilog(loggerConfiguration.CreateLogger());
+            }
+
+            if (string.Equals(logProviderKey, "seq", StringComparison.OrdinalIgnoreCase))
+            {
+                var loggerConfiguration = new LoggerConfiguration()
+                                            .Enrich.WithProperty("Application", serviceName)
+                                            .Enrich.WithProperty("Instance", replicaName)
+                                            .Enrich.FromLogContext()
+                                            .WriteTo.Seq(logProviderValue);
+
+                builder.AddSerilog(loggerConfiguration.CreateLogger());
+            }
+
+            if (string.Equals(logProviderKey, "ai", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(logProviderValue))
+            {
+                builder.AddApplicationInsights(logProviderValue);
+            }
+
+            // REVIEW: How are log levels controlled on the outside?
+            builder.SetMinimumLevel(LogLevel.Information);
+        }
+
+
+        private void ConfigureTracing(string serviceName, string replicaName, TracerBuilder builder)
+        {
+            if (string.Equals(_options.DistributedTraceProvider.Key, "zipkin", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(_options.DistributedTraceProvider.Value))
+            {
+                builder.UseZipkin(options =>
+                {
+                    options.ServiceName = serviceName;
+                    options.Endpoint = new Uri($"{_options.DistributedTraceProvider.Value}/api/v2/spans");
+                });
+            }
+
+            // TODO: Support Jaegar
+            // TODO: Support ApplicationInsights
         }
 
         private class ActivityItem

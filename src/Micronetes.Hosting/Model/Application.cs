@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Build.Construction;
-using Microsoft.Extensions.Logging;
-using OpenTelemetry.Trace.Configuration;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -13,6 +11,8 @@ namespace Micronetes.Hosting.Model
     public class Application
     {
         public string ContextDirectory { get; set; } = Directory.GetCurrentDirectory();
+
+        public string Source { get; set; }
 
         public Application(IEnumerable<ServiceDescription> services)
         {
@@ -60,6 +60,7 @@ namespace Micronetes.Hosting.Model
 
             return new Application(descriptions)
             {
+                Source = fullPath,
                 // Use the file location as the context when loading from a file
                 ContextDirectory = contextDirectory
             };
@@ -73,6 +74,7 @@ namespace Micronetes.Hosting.Model
 
             return new Application(projectDescription == null ? new ServiceDescription[0] : new ServiceDescription[] { projectDescription })
             {
+                Source = fullPath,
                 ContextDirectory = Path.GetDirectoryName(fullPath)
             };
         }
@@ -168,15 +170,12 @@ namespace Micronetes.Hosting.Model
 
             return new Application(descriptions)
             {
+                Source = fullPath,
                 ContextDirectory = Path.GetDirectoryName(fullPath)
             };
         }
 
         public Dictionary<string, Service> Services { get; }
-
-        internal Action<string, string, ILoggingBuilder> ConfigureLogging { get; set; }
-
-        internal Action<string, string, TracerBuilder> ConfigureTracing { get; set; }
 
         internal void PopulateEnvironment(Service service, Action<string, string> set)
         {
