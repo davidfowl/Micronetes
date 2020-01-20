@@ -4,14 +4,14 @@ using System.Linq;
 
 namespace Micronetes.Hosting
 {
-    public class OutOfProcessOptions
+    public class ProcessRunnerOptions
     {
         public bool DebugMode { get; set; }
         public bool BuildProjects { get; set; }
 
-        public static OutOfProcessOptions FromArgs(string[] args)
+        public static ProcessRunnerOptions FromArgs(string[] args)
         {
-            return new OutOfProcessOptions
+            return new ProcessRunnerOptions
             {
                 BuildProjects = !args.Contains("--no-build"),
                 DebugMode = args.Contains("--debug")

@@ -107,7 +107,7 @@ namespace Micronetes.Hosting
             var processor = new AggregateApplicationProcessor(new IApplicationProcessor[] {
                 new ProxyService(logger),
                 new DockerRunner(logger),
-                new ProcessRunner(logger, OutOfProcessOptions.FromArgs(args), diagnosticsCollector),
+                new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args), diagnosticsCollector),
             });
 
             await host.StartAsync();

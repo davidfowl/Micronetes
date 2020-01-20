@@ -17,7 +17,7 @@ namespace Micronetes.Hosting
         private readonly bool _buildProjects;
         private DiagnosticsCollector _diagnosticsCollector;
 
-        public ProcessRunner(ILogger logger, OutOfProcessOptions options, DiagnosticsCollector diagnosticsCollector)
+        public ProcessRunner(ILogger logger, ProcessRunnerOptions options, DiagnosticsCollector diagnosticsCollector)
         {
             _logger = logger;
             _debugMode = options.DebugMode;
