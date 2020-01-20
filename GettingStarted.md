@@ -35,7 +35,7 @@
    ```
    We chose port 8001 for the dashboard. After running this command, it should be possible to navigate to http://localhost:8001 to see the dashboard running.
    
-   The dashboard should show the `api` application running. You should be able to view the application logs and you should be able to hit navigate to the application in your browser.
+   The dashboard should show the `frontend` application running. You should be able to view the application logs and you should be able to hit navigate to the application in your browser.
 1. Create a back end API that the front end will call.
    ```
    dotnet new api -n backend
