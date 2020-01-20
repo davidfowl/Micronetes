@@ -4,6 +4,10 @@
 
 Micronetes is a local orchestrator inspired by kubernetes that makes developing and testing microservices and distributed applications easier.
 
+## Getting Started
+
+See the [guide](GettingStarted.md) on getting your first microservice running with Micronetes.
+
 ## Why not minikube, k3s, k5s, microk8s etc?
 
 The things that lead me to this solution:
