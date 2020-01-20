@@ -190,7 +190,7 @@ We just showed how **Micronetes** makes it easier to communicate between 2 appli
    ```
 1. Add a package reference to `Microsoft.Extensions.Caching.StackExchangeRedis`:
    ```
-   dotnet package add Microsoft.Extensions.Caching.StackExchangeRedis
+   dotnet add package Microsoft.Extensions.Caching.StackExchangeRedis
    ```
 1. Modify `Startup.ConfigureServices` in the `backend` project to add the redis `IDistributedCache` implementation.
    ```C#
