@@ -37,7 +37,11 @@ namespace Micronetes.Hosting
                 {
                     web.ConfigureServices(services =>
                     {
-                        services.AddRazorPages();
+                        services.AddRazorPages(o =>
+                        {
+                            o.RootDirectory = "/Dashboard/Pages";
+                        });
+
                         services.AddServerSideBlazor();
 
                         services.AddOptions<StaticFileOptions>()
