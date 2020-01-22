@@ -60,7 +60,8 @@ namespace Micronetes.Hosting
 
             if (serviceDescription.Project != null)
             {
-                var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Project));
+                var expandedProject = Environment.ExpandEnvironmentVariables(serviceDescription.Project);
+                var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, expandedProject));
                 path = GetExePath(fullProjectPath);
                 workingDirectory = Path.GetDirectoryName(fullProjectPath);
                 // TODO: Requires msbuild
@@ -70,10 +71,11 @@ namespace Micronetes.Hosting
             }
             else
             {
-                applicationName = Path.GetFileNameWithoutExtension(serviceDescription.Executable);
-                path = Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.Executable));
+                var expandedExecutable = Environment.ExpandEnvironmentVariables(serviceDescription.Executable);
+                applicationName = Path.GetFileNameWithoutExtension(expandedExecutable);
+                path = Path.GetFullPath(Path.Combine(application.ContextDirectory, expandedExecutable));
                 workingDirectory = serviceDescription.WorkingDirectory != null ?
-                    Path.GetFullPath(Path.Combine(application.ContextDirectory, serviceDescription.WorkingDirectory)) :
+                    Path.GetFullPath(Path.Combine(application.ContextDirectory, Environment.ExpandEnvironmentVariables(serviceDescription.WorkingDirectory))) :
                     Path.GetDirectoryName(path);
             }
 
