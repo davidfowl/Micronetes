@@ -10,6 +10,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
+    using System.Xml.Linq;
+    using System.Xml.XPath;
+
     public class ProcessRunner : IApplicationProcessor
     {
         private readonly ILogger _logger;
@@ -300,7 +303,7 @@ namespace Micronetes.Hosting
         {
             // TODO: Use msbuild to get the target path
 
-            var outputFileName = Path.GetFileNameWithoutExtension(projectFilePath) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
+            var outputFileName = GetAssemblyName(projectFilePath) + (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "");
 
             var debugOutputPath = Path.Combine(Path.GetDirectoryName(projectFilePath), "bin", "Debug");
 
@@ -316,10 +319,30 @@ namespace Micronetes.Hosting
                 }
 
                 // Older versions of .NET Core didn't have TFMs
-                return Path.Combine(debugOutputPath, tfms[0], Path.GetFileNameWithoutExtension(projectFilePath) + ".dll");
+                return Path.Combine(debugOutputPath, tfms[0], GetAssemblyName(projectFilePath) + ".dll");
             }
 
             return Path.Combine(debugOutputPath, "netcoreapp3.1", outputFileName);
+        }
+
+        private static string GetAssemblyName(string projectFilePath)
+        {
+            try
+            {
+                var importProjectFile = XDocument.Load(projectFilePath);
+
+                var assemblyName = importProjectFile.XPathSelectElement("Project/PropertyGroup/AssemblyName")?.Value;
+                if (!string.IsNullOrEmpty(assemblyName))
+                {
+                    return assemblyName;
+                }
+            }
+            catch (Exception)
+            {
+                // TODO: perhaps output the exception message
+            }
+
+            return Path.GetFileNameWithoutExtension(projectFilePath);
         }
 
         private class ProcessInfo
