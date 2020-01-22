@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="Bedrock.Framework" Version="0.1.38-alpha.gd25d5b37ad" />
-    <PackageReference Include="FeatherHttp" Version="0.1.37-alpha.g80b6d0e77d" />
+    <PackageReference Include="FeatherHttp" Version="0.1.40-alpha.g03d8989815" />
     <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="3.1.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.12.0" />
     <PackageReference Include="Mono.Posix.NETStandard" Version="1.0.0" />

@@ -18,8 +18,6 @@ namespace Micronetes.Hosting
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            builder.Server.UseSetting(WebHostDefaults.ApplicationKey, typeof(MicronetesHost).Assembly.GetName().Name);
-
             // Logging for this application
             builder.Host.UseSerilog((context, configuration) => configuration
                 .MinimumLevel.Verbose()
