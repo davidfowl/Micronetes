@@ -1,13 +1,11 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Filters;
@@ -19,6 +17,8 @@ namespace Micronetes.Hosting
         public static async Task RunAsync(Application application, string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            builder.Server.UseSetting(WebHostDefaults.ApplicationKey, typeof(MicronetesHost).Assembly.GetName().Name);
 
             // Logging for this application
             builder.Host.UseSerilog((context, configuration) => configuration
