@@ -37,7 +37,7 @@ namespace Micronetes.Hosting
                 {
                     var fileProvider = new ManifestEmbeddedFileProvider(typeof(MicronetesHost).Assembly, "wwwroot");
 
-                    // Make sure we don't remove the existing fil providers (blazor needs this)
+                    // Make sure we don't remove the existing file providers (blazor needs this)
                     o.FileProvider = new CompositeFileProvider(o.FileProvider, fileProvider);
                 });
 
