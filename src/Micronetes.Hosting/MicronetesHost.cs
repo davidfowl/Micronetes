@@ -20,8 +20,6 @@ namespace Micronetes.Hosting
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            builder.Host.UseContentRoot(Path.GetDirectoryName(typeof(MicronetesHost).Assembly.Location));
-
             // Logging for this application
             builder.Host.UseSerilog((context, configuration) => configuration
                 .MinimumLevel.Verbose()
