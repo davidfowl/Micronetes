@@ -72,7 +72,14 @@ namespace Micronetes.Hosting
                 {
                     if (e.Data != null)
                     {
-                        errorBuilder.AppendLine(e.Data);
+                        if (outputDataReceived != null)
+                        {
+                            outputDataReceived.Invoke(e.Data);
+                        }
+                        else
+                        {
+                            errorBuilder.AppendLine(e.Data);
+                        }
                     }
                 };
 
