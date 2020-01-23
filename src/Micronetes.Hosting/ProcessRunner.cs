@@ -104,11 +104,12 @@ namespace Micronetes.Hosting
 
                 var buildResult = ProcessUtil.Run("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
                                                  outputDataReceived: data => service.Logs.OnNext(data),
+                                                 errorDataReceived: data => service.Logs.OnNext(data),
                                                  throwOnError: false);
 
                 if (buildResult.ExitCode != 0)
                 {
-                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
+                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardOutput + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
                     return Task.CompletedTask;
                 }
             }
@@ -186,6 +187,7 @@ namespace Micronetes.Hosting
                             environmentVariables: environment,
                             workingDirectory: workingDirectory,
                             outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
+                            errorDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
                             onStart: pid =>
                             {
                                 if (hasPorts)
