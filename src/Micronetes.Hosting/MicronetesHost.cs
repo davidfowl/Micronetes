@@ -1,16 +1,11 @@
 using System;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Filters;
@@ -21,84 +16,58 @@ namespace Micronetes.Hosting
     {
         public static async Task RunAsync(Application application, string[] args)
         {
-            using var host = Host.CreateDefaultBuilder(args)
-                .UseSerilog((context, configuration) =>
+            var builder = WebApplication.CreateBuilder(args);
+
+            // Logging for this application
+            builder.Host.UseSerilog((context, configuration) => configuration
+                .MinimumLevel.Verbose()
+                .Filter.ByExcluding(Matching.FromSource("Microsoft"))
+                .Enrich
+                .FromLogContext()
+                .WriteTo
+                .Console()
+            );
+
+            builder.Services.AddRazorPages(o => o.RootDirectory = "/Dashboard/Pages");
+
+            builder.Services.AddServerSideBlazor();
+
+            builder.Services.AddOptions<StaticFileOptions>()
+                .PostConfigure(o =>
                 {
-                    // Logging for this application
-                    configuration
-                        .MinimumLevel.Verbose()
-                        .Filter.ByExcluding(Matching.FromSource("Microsoft"))
-                        .Enrich
-                        .FromLogContext()
-                        .WriteTo
-                        .Console();
-                })
-                .ConfigureWebHostDefaults(web =>
-                {
-                    web.ConfigureServices(services =>
-                    {
-                        services.AddRazorPages(o =>
-                        {
-                            o.RootDirectory = "/Dashboard/Pages";
-                        });
+                    var fileProvider = new ManifestEmbeddedFileProvider(typeof(MicronetesHost).Assembly, "wwwroot");
 
-                        services.AddServerSideBlazor();
+                    // Make sure we don't remove the existing file providers (blazor needs this)
+                    o.FileProvider = new CompositeFileProvider(o.FileProvider, fileProvider);
+                });
 
-                        services.AddOptions<StaticFileOptions>()
-                            .PostConfigure(o =>
-                            {
-                                // Make sure we don't remove the other file providers (blazor needs this)
-                                o.FileProvider = new CompositeFileProvider(o.FileProvider, new ManifestEmbeddedFileProvider(typeof(MicronetesHost).Assembly, "wwwroot"));
-                            });
+            builder.Services.AddSingleton(application);
 
-                        services.AddSingleton(application);
-                    });
+            using var app = builder.Build();
 
-                    web.ConfigureKestrel(options =>
-                    {
-                        var config = options.ApplicationServices.GetRequiredService<IConfiguration>();
+            var port = app.Configuration["port"] ?? "0";
 
-                        if (config["port"] != null && int.TryParse(config["port"], out int cpPort))
-                        {
-                            // Use the specified port
-                            options.Listen(IPAddress.Loopback, cpPort);
-                        }
-                        else
-                        {
-                            // This is lame but it allows running multiple versions of this
-                            // we should also allow ports to be specified as input
-                            options.Listen(IPAddress.Loopback, 0);
-                        }
-                    });
+            app.Listen($"http://127.0.0.1:{port}");
 
-                    web.Configure(app =>
-                    {
-                        app.UseDeveloperExceptionPage();
+            app.UseDeveloperExceptionPage();
 
-                        app.UseStaticFiles();
+            app.UseStaticFiles();
 
-                        app.UseRouting();
+            app.UseRouting();
 
-                        var api = new MicronetesApi();
+            var api = new MicronetesApi();
 
-                        app.UseEndpoints(endpoints =>
-                        {
-                            api.MapRoutes(endpoints);
+            api.MapRoutes(app);
 
-                            endpoints.MapBlazorHub();
-                            endpoints.MapFallbackToPage("/_Host");
-                        });
-                    });
-                })
-                .Build();
+            app.MapBlazorHub();
+            app.MapFallbackToPage("/_Host");
 
-            var logger = host.Services.GetRequiredService<ILogger<MicronetesHost>>();
+            var logger = app.Logger;
 
             logger.LogInformation("Executing application from  {Source}", application.Source);
 
-            var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
-            var configuration = host.Services.GetRequiredService<IConfiguration>();
-            var serverAddressesFeature = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
+            var lifetime = app.ApplicationLifetime;
+            var configuration = app.Configuration;
 
             var diagnosticOptions = DiagnosticOptions.FromConfiguration(configuration);
             var diagnosticsCollector = new DiagnosticsCollector(logger, diagnosticOptions);
@@ -112,9 +81,9 @@ namespace Micronetes.Hosting
                 new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args), diagnosticsCollector),
             });
 
-            await host.StartAsync();
+            await app.StartAsync();
 
-            logger.LogInformation("Dashboard running on {Address}", serverAddressesFeature.Addresses.First());
+            logger.LogInformation("Dashboard running on {Address}", app.Addresses.First());
 
             try
             {
@@ -139,7 +108,7 @@ namespace Micronetes.Hosting
             finally
             {
                 // Stop the host after everything else has been shutdown
-                await host.StopAsync();
+                await app.StopAsync();
             }
         }
     }

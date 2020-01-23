@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -12,6 +13,7 @@ namespace Micronetes.Hosting
     public class DockerRunner : IApplicationProcessor
     {
         private readonly ILogger _logger;
+        private readonly Lazy<bool> _dockerInstalled = new Lazy<bool>(DetectDockerInstalled);
 
         public DockerRunner(ILogger logger)
         {
@@ -49,6 +51,14 @@ namespace Micronetes.Hosting
         {
             if (service.Description.DockerImage == null)
             {
+                return Task.CompletedTask;
+            }
+
+            if (!_dockerInstalled.Value)
+            {
+                _logger.LogError("Unable to start docker container for service {ServiceName}, Docker is not installed.", service.Description.Name);
+
+                service.Logs.OnNext($"Unable to start docker container for service {service.Description.Name}, Docker is not installed.");
                 return Task.CompletedTask;
             }
 
@@ -237,6 +247,22 @@ namespace Micronetes.Hosting
                 }
             }
         }
+
+        private static bool DetectDockerInstalled()
+        {
+            // Detect Docker installation
+            try
+            {
+                ProcessUtil.Run("docker", "version", throwOnError: false);
+                return true;
+            }
+            catch (Exception)
+            {
+                // Unfortunately, process throws
+                return false;
+            }
+        }
+
 
         private class DockerInformation
         {
