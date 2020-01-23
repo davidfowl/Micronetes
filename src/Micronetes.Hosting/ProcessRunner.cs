@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
@@ -141,94 +142,98 @@ namespace Micronetes.Hosting
                     }
                 }
 
-                while (!processInfo.StoppedTokenSource.IsCancellationRequested)
+                using (new ProcessLogCollector(application, service))
                 {
-                    var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                    var status = new ProcessStatus();
-                    service.Replicas[replica] = status;
-
-                    // This isn't your host name
-                    environment["APP_INSTANCE"] = replica;
-
-                    status.ExitCode = null;
-                    status.Pid = null;
-                    status.Environment = environment;
-
-                    if (hasPorts)
+                    while (!processInfo.StoppedTokenSource.IsCancellationRequested)
                     {
-                        status.Ports = ports.Select(p => p.Port);
-                    }
+                        var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
+                        var status = new ProcessStatus();
+                        service.Replicas[replica] = status;
 
-                    _logger.LogInformation("Launching service {ServiceName}: {ExePath} {args}", replica, path, args);
+                        // This isn't your host name
+                        environment["APP_INSTANCE"] = replica;
 
-                    var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
+                        status.ExitCode = null;
+                        status.Pid = null;
+                        status.Environment = environment;
 
-                    // This is the thread that will collect diagnostics from the running process
-                    // - Logs - I'll collect structured logs from Microsoft.Extensions.Logging
-                    // - Metrics - It'll collect EventCounters
-                    // - Distribued Traces - It'll create spans
-                    var diagnosticsThread = new Thread(state =>
-                    {
-                        _diagnosticsCollector.ProcessEvents(
-                            applicationName,
-                            service.Description.Name,
-                            (int)state,
-                            replica,
-                            status,
-                            metricsTokenSource.Token);
-                    });
-
-                    try
-                    {
-                        service.Logs.OnNext($"[{replica}]:{path} {args}");
-
-                        var result = ProcessUtil.Run(path, args,
-                            environmentVariables: environment,
-                            workingDirectory: workingDirectory,
-                            outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
-                            onStart: pid =>
-                            {
-                                if (hasPorts)
-                                {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => $"{p.Protocol ?? "http"}://localhost:{p.Port}")));
-                                }
-                                else
-                                {
-                                    _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
-                                }
-
-                                status.Pid = pid;
-
-                                diagnosticsThread.Start(pid);
-                            },
-                            throwOnError: false,
-                            cancellationToken: processInfo.StoppedTokenSource.Token);
-
-                        status.ExitCode = result.ExitCode;
-
-                        if (status.Pid != null)
+                        if (hasPorts)
                         {
-                            metricsTokenSource.Cancel();
-
-                            diagnosticsThread.Join();
+                            status.Ports = ports.Select(p => p.Port);
                         }
+
+                        _logger.LogInformation("Launching service {ServiceName}: {ExePath} {args}", replica, path, args);
+
+                        var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
+
+                        // This is the thread that will collect diagnostics from the running process
+                        // - Logs - I'll collect structured logs from Microsoft.Extensions.Logging
+                        // - Metrics - It'll collect EventCounters
+                        // - Distribued Traces - It'll create spans
+                        var diagnosticsThread = new Thread(state =>
+                        {
+                            _diagnosticsCollector.ProcessEvents(
+                                applicationName,
+                                service.Description.Name,
+                                (int)state,
+                                replica,
+                                status,
+                                metricsTokenSource.Token);
+                        });
+
+                        try
+                        {
+                            service.Logs.OnNext($"[{replica}]:{path} {args}");
+
+                            var result = ProcessUtil.Run(path, args,
+                                environmentVariables: environment,
+                                workingDirectory: workingDirectory,
+                                outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
+                                errorDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
+                                onStart: pid =>
+                                {
+                                    if (hasPorts)
+                                    {
+                                        _logger.LogInformation("{ServiceName} running on process id {PID} bound to {Address}", replica, pid, string.Join(", ", ports.Select(p => $"{p.Protocol ?? "http"}://localhost:{p.Port}")));
+                                    }
+                                    else
+                                    {
+                                        _logger.LogInformation("{ServiceName} running on process id {PID}", replica, pid);
+                                    }
+
+                                    status.Pid = pid;
+
+                                    diagnosticsThread.Start(pid);
+                                },
+                                throwOnError: false,
+                                cancellationToken: processInfo.StoppedTokenSource.Token);
+
+                            status.ExitCode = result.ExitCode;
+
+                            if (status.Pid != null)
+                            {
+                                metricsTokenSource.Cancel();
+
+                                diagnosticsThread.Join();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(0, ex, "Failed to launch process for service {ServiceName}", replica);
+
+                            Thread.Sleep(5000);
+                        }
+
+                        service.Restarts++;
+
+                        if (status.ExitCode != null)
+                        {
+                            _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", replica, status.ExitCode);
+                        }
+
+                        // Remove the replica from the set
+                        service.Replicas.TryRemove(replica, out _);
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(0, ex, "Failed to launch process for service {ServiceName}", replica);
-
-                        Thread.Sleep(5000);
-                    }
-
-                    service.Restarts++;
-
-                    if (status.ExitCode != null)
-                    {
-                        _logger.LogInformation("{ServiceName} process exited with exit code {ExitCode}", replica, status.ExitCode);
-                    }
-
-                    // Remove the replica from the set
-                    service.Replicas.TryRemove(replica, out _);
                 }
             }
 

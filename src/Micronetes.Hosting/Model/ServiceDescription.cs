@@ -14,6 +14,7 @@ namespace Micronetes.Hosting.Model
         public string Executable { get; set; }
         public string WorkingDirectory { get; set; }
         public string Args { get; set; }
+        public string ConsoleLogDestinationPath { get; set; }
         public int? Replicas { get; set; }
         public List<ServiceBinding> Bindings { get; set; } = new List<ServiceBinding>();
         [YamlMember(Alias = "env")]

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
@@ -138,35 +139,38 @@ namespace Micronetes.Hosting
 
                 _logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
+                using (new ProcessLogCollector(application, service))
+                {
+                    _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
-                ProcessUtil.Run("docker", $"logs -f {containerId}",
-                    outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
-                    onStart: pid =>
-                    {
-                        status.DockerLogsPid = pid;
-                    },
-                    throwOnError: false,
-                    cancellationToken: dockerInfo.StoppingTokenSource.Token);
+                    ProcessUtil.Run("docker", $"logs -f {containerId}",
+                        outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
+                        onStart: pid =>
+                        {
+                            status.DockerLogsPid = pid;
+                        },
+                        throwOnError: false,
+                        cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
-                _logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
+                    _logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
 
-                // Docker has a tendency to hang so we're going to timeout this shutdown process
-                var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    // Docker has a tendency to hang so we're going to timeout this shutdown process
+                    var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-                _logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
+                    _logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+                    result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
-                PrintStdOutAndErr(service, replica, result);
+                    PrintStdOutAndErr(service, replica, result);
 
-                _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                    _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
-                result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+                    result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
-                PrintStdOutAndErr(service, replica, result);
+                    PrintStdOutAndErr(service, replica, result);
 
-                _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                    _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                }
 
                 service.Replicas.TryRemove(replica, out _);
             };
