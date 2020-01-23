@@ -10,7 +10,9 @@
 - name: worker
   project: Worker/Worker.csproj
 - name: rabbit
-  dockerImage: rabbitmq
+  dockerImage: rabbitmq:3-management
   bindings:
     - port: 5672
       protocol: rabbitmq
+    - name: management
+      port: 15672
