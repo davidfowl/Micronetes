@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Micronetes.Hosting;
 using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Metrics;
@@ -16,8 +17,10 @@ using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventSource;
 using Microsoft.Hosting.Logging;
+using OpenTelemetry.Exporter.Zipkin;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Trace.Configuration;
+using OpenTelemetry.Trace.Export;
 using Serilog;
 
 namespace Micronetes.Hosting
@@ -40,6 +43,9 @@ namespace Micronetes.Hosting
             ";ActivityStartTime=*Activity.StartTimeUtc.Ticks" +
             ";ActivityParentId=*Activity.ParentId" +
             ";ActivityId=*Activity.Id" +
+            ";ActivitySpanId=*Activity.SpanId" +
+            ";ActivityTraceId=*Activity.TraceId" +
+            ";ActivityParentSpanId=*Activity.ParentSpanId" +
             ";ActivityIdFormat=*Activity.IdFormat" +
           "\r\n" +
         "Microsoft.AspNetCore/Microsoft.AspNetCore.Hosting.HttpRequestIn.Stop@Activity1Stop:-" +
@@ -105,19 +111,7 @@ namespace Micronetes.Hosting
             // Create the logger factory for this replica
             using var loggerFactory = LoggerFactory.Create(builder => ConfigureLogging(serviceName, replicaName, builder));
 
-            // Create the tracer for this replica
-            Tracer tracer = null;
-
-            using var tracerFactory = TracerFactory.Create(builder =>
-            {
-                builder.AddCollector(t =>
-                {
-                    tracer = t;
-                    return t;
-                });
-
-                ConfigureTracing(serviceName, replicaName, builder);
-            });
+            var processor = new SimpleSpanProcessor(CreateSpanExporter(serviceName, replicaName));
 
             var providers = new List<EventPipeProvider>()
             {
@@ -258,6 +252,9 @@ namespace Micronetes.Hosting
                                     string operationName = null;
                                     string httpMethod = null;
                                     string path = null;
+                                    string spanId = null;
+                                    string parentSpanId = null;
+                                    string traceId = null;
                                     DateTime startTime = default;
                                     ActivityIdFormat idFormat = default;
 
@@ -269,6 +266,9 @@ namespace Micronetes.Hosting
                                         if (key == "ActivityId") activityId = value;
                                         else if (key == "ActivityParentId") parentId = value;
                                         else if (key == "ActivityOperationName") operationName = value;
+                                        else if (key == "ActivitySpanId") spanId = value;
+                                        else if (key == "ActivityTraceId") traceId = value;
+                                        else if (key == "ActivityParentSpanId") parentSpanId = value;
                                         else if (key == "Method") httpMethod = value;
                                         else if (key == "Path") path = value;
                                         else if (key == "ActivityStartTime") startTime = new DateTime(long.Parse(value), DateTimeKind.Utc);
@@ -281,40 +281,28 @@ namespace Micronetes.Hosting
                                         return;
                                     }
 
-                                    // REVIEW: We need to create the Span with the specific trace and span id that came from remote process
-                                    // but OpenTelemetry doesn't currently have an easy way to do that so this only works for a single
-                                    // process as we're making new ids instead of using the ones in the application.
-                                    //if (idFormat == ActivityIdFormat.Hierarchical)
-                                    //{
-                                    //    // We need W3C to make it work
-                                    //    return;
-                                    //}
+                                    if (idFormat == ActivityIdFormat.Hierarchical)
+                                    {
+                                        // We need W3C to make it work
+                                        return;
+                                    }
 
                                     // This is what open telemetry currently does
                                     // https://github.com/open-telemetry/opentelemetry-dotnet/blob/4ba732af062ddc2759c02aebbc91335aaa3f7173/src/OpenTelemetry.Collector.AspNetCore/Implementation/HttpInListener.cs#L65-L92
 
-                                    ISpan parentSpan = null;
-
-                                    if (!string.IsNullOrEmpty(parentId) &&
-                                       activities.TryGetValue(parentId, out var parentItem))
+                                    var item = new ActivityItem()
                                     {
-                                        parentSpan = parentItem.Span;
-                                    }
-
-                                    var span = tracer.StartSpan(path, parentSpan, SpanKind.Server, new SpanCreationOptions { StartTimestamp = startTime });
-
-                                    // REVIEW: Things we're unable to do
-                                    // - We can't get a headers
-                                    // - We can't get at features in the feature collection of the HttpContext
-                                    span.PutHttpPathAttribute(path);
-                                    span.PutHttpMethodAttribute(httpMethod);
-                                    span.SetAttribute("service.instance", replicaName);
-
-                                    activities[activityId] = new ActivityItem
-                                    {
-                                        Span = span,
-                                        StartTime = startTime
+                                        Name = path,
+                                        SpanId = ActivitySpanId.CreateFromString(spanId),
+                                        TraceId = ActivityTraceId.CreateFromString(traceId),
+                                        ParentSpanId = parentSpanId == "0000000000000000" ? default : ActivitySpanId.CreateFromString(parentSpanId),
+                                        StartTime = startTime,
                                     };
+
+                                    item.Attributes[SpanAttributeConstants.HttpMethodKey] = httpMethod;
+                                    item.Attributes[SpanAttributeConstants.HttpPathKey] = path;
+
+                                    activities[activityId] = item;
                                 }
                             }
                             else if (traceEvent.EventName == "Activity1Stop/Stop")
@@ -343,13 +331,25 @@ namespace Micronetes.Hosting
                                         return;
                                     }
 
-                                    if (activities.TryGetValue(activityId, out var activityItem))
+                                    if (activities.TryGetValue(activityId, out var item))
                                     {
-                                        var span = activityItem.Span;
+                                        item.Attributes[SpanAttributeConstants.HttpStatusCodeKey] = statusCode;
 
-                                        span.PutHttpStatusCode(statusCode, null);
+                                        item.EndTime = item.StartTime + duration;
 
-                                        span.End(activityItem.StartTime + duration);
+                                        var spanData = new SpanData(item.Name,
+                                            new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
+                                            item.ParentSpanId,
+                                            SpanKind.Server,
+                                            item.StartTime,
+                                            item.Attributes,
+                                           Enumerable.Empty<Event>(),
+                                           Enumerable.Empty<Link>(),
+                                           null,
+                                           Status.Ok,
+                                           item.EndTime);
+
+                                        processor.OnEnd(spanData);
 
                                         activities.Remove(activityId);
                                     }
@@ -590,27 +590,50 @@ namespace Micronetes.Hosting
         }
 
 
-        private void ConfigureTracing(string serviceName, string replicaName, TracerBuilder builder)
+        private SpanExporter CreateSpanExporter(string serviceName, string replicaName)
         {
             if (string.Equals(_options.DistributedTraceProvider.Key, "zipkin", StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrEmpty(_options.DistributedTraceProvider.Value))
             {
-                builder.UseZipkin(options =>
+                var zipkin = new ZipkinTraceExporter(new ZipkinTraceExporterOptions
                 {
-                    options.ServiceName = serviceName;
-                    options.Endpoint = new Uri($"{_options.DistributedTraceProvider.Value}/api/v2/spans");
+                    ServiceName = serviceName,
+                    Endpoint = new Uri($"{_options.DistributedTraceProvider.Value}/api/v2/spans")
                 });
+
+                return zipkin;
             }
 
             // TODO: Support Jaegar
             // TODO: Support ApplicationInsights
+
+            return new NullExporter();
+        }
+
+        public class NullExporter : SpanExporter
+        {
+            public override Task<ExportResult> ExportAsync(IEnumerable<SpanData> batch, CancellationToken cancellationToken)
+            {
+                return Task.FromResult(ExportResult.Success);
+            }
+
+            public override Task ShutdownAsync(CancellationToken cancellationToken)
+            {
+                return Task.CompletedTask;
+            }
         }
 
         private class ActivityItem
         {
-            public ISpan Span { get; set; }
+            public string Name { get; set; }
+            public ActivityTraceId TraceId { get; set; }
+            public ActivitySpanId SpanId { get; set; }
+            public Dictionary<string, object> Attributes { get; } = new Dictionary<string, object>();
 
             public DateTime StartTime { get; set; }
+            public DateTime EndTime { get; set; }
+
+            public ActivitySpanId ParentSpanId { get; set; }
         }
 
         private class LogActivityItem
@@ -620,6 +643,20 @@ namespace Micronetes.Hosting
             public LogObject ScopedObject { get; set; }
 
             public LogActivityItem Parent { get; set; }
+        }
+
+        internal static class SpanAttributeConstants
+        {
+            public static readonly string ComponentKey = "component";
+
+            public static readonly string HttpMethodKey = "http.method";
+            public static readonly string HttpStatusCodeKey = "http.status_code";
+            public static readonly string HttpUserAgentKey = "http.user_agent";
+            public static readonly string HttpPathKey = "http.path";
+            public static readonly string HttpHostKey = "http.host";
+            public static readonly string HttpUrlKey = "http.url";
+            public static readonly string HttpRouteKey = "http.route";
+            public static readonly string HttpFlavorKey = "http.flavor";
         }
     }
 }
