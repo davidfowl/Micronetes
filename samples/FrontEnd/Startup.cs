@@ -23,7 +23,7 @@ namespace FrontEnd
         {
             services.AddRazorPages();
 
-            var address = Configuration.GetUri("backend");
+            var address = Configuration.GetServiceUri("backend");
 
             services.AddSingleton(_ => GrpcChannel.ForAddress(address).CreateGrpcService<IOrderService>());
         }

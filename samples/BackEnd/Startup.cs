@@ -35,11 +35,10 @@ namespace BackEnd
 
             services.AddSingleton(sp =>
             {
-                var uri = Configuration.GetUri("rabbit");
                 var factory = new ConnectionFactory()
                 {
-                    HostName = uri.Host,
-                    Port = uri.Port
+                    HostName = Configuration["service:rabbit:host"],
+                    Port = int.Parse(Configuration["service:rabbit:port"])
                 };
                 var connection = factory.CreateConnection();
                 var channel = connection.CreateModel();
