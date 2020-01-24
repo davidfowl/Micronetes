@@ -9,12 +9,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Diagnostics.Logging;
 using Micronetes.Hosting.Diagnostics.Metrics;
-using Micronetes.Hosting.Model;
 using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.EventSource;
 using OpenTelemetry.Exporter.Zipkin;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Trace.Export;
@@ -89,7 +87,7 @@ namespace Micronetes.Hosting.Diagnostics
                                   string serviceName,
                                   int processId,
                                   string replicaName,
-                                  ReplicaStatus replica,
+                                  IDictionary<string, string> metrics,
                                   CancellationToken cancellationToken)
         {
             var hasEventPipe = false;
@@ -243,7 +241,7 @@ namespace Micronetes.Hosting.Diagnostics
                     HandleDistributedTracingEvents(source, processor);
 
                     // Metrics
-                    HandleEventCounters(source, replica.Metrics);
+                    HandleEventCounters(source, metrics);
 
                     // Logging
                     HandleLoggingEvents(source, loggerFactory, replicaName);
@@ -403,7 +401,7 @@ namespace Micronetes.Hosting.Diagnostics
             });
         }
 
-        private void HandleEventCounters(EventPipeEventSource source, Dictionary<string, string> metrics)
+        private void HandleEventCounters(EventPipeEventSource source, IDictionary<string, string> metrics)
         {
             source.Dynamic.All += traceEvent =>
             {
@@ -824,5 +822,32 @@ namespace Micronetes.Hosting.Diagnostics
             public static readonly string HttpRouteKey = "http.route";
             public static readonly string HttpFlavorKey = "http.flavor";
         }
-    }
+
+        internal sealed class LoggingEventSource
+        {
+            /// <summary>
+            /// This is public from an EventSource consumer point of view, but since these defintions
+            /// are not needed outside this class
+            /// </summary>
+            public static class Keywords
+            {
+                /// <summary>
+                /// Meta events are events about the LoggingEventSource itself (that is they did not come from ILogger
+                /// </summary>
+                public const EventKeywords Meta = (EventKeywords)1;
+                /// <summary>
+                /// Turns on the 'Message' event when ILogger.Log() is called.   It gives the information in a programmatic (not formatted) way
+                /// </summary>
+                public const EventKeywords Message = (EventKeywords)2;
+                /// <summary>
+                /// Turns on the 'FormatMessage' event when ILogger.Log() is called.  It gives the formatted string version of the information.
+                /// </summary>
+                public const EventKeywords FormattedMessage = (EventKeywords)4;
+                /// <summary>
+                /// Turns on the 'MessageJson' event when ILogger.Log() is called.   It gives  JSON representation of the Arguments.
+                /// </summary>
+                public const EventKeywords JsonMessage = (EventKeywords)8;
+            }
+        }
+        }
 }

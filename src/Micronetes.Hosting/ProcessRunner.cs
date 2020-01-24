@@ -175,7 +175,7 @@ namespace Micronetes.Hosting
                             service.Description.Name,
                             (int)state,
                             replica,
-                            status,
+                            status.Metrics,
                             metricsTokenSource.Token);
                     });
 
