@@ -28,6 +28,7 @@ modules/
 *.pidb
 *.psess
 *.res
+*.sln.DotSettings
 *.snk
 *.so
 *.suo
