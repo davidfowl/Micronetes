@@ -108,7 +108,7 @@ namespace Micronetes.Hosting
 
                 if (buildResult.ExitCode != 0)
                 {
-                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
+                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardOutput + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
                     return Task.CompletedTask;
                 }
             }

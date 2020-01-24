@@ -19,6 +19,7 @@ namespace Micronetes.Hosting
             bool throwOnError = true,
             IDictionary<string, string> environmentVariables = null,
             Action<string> outputDataReceived = null,
+            Action<string> errorDataReceived = null,
             bool log = false,
             Action<int> onStart = null,
             CancellationToken cancellationToken = default)
@@ -72,7 +73,11 @@ namespace Micronetes.Hosting
                 {
                     if (e.Data != null)
                     {
-                        if (outputDataReceived != null)
+                        if (errorDataReceived != null)
+                        {
+                            errorDataReceived.Invoke(e.Data);
+                        }
+                        else if (outputDataReceived != null)
                         {
                             outputDataReceived.Invoke(e.Data);
                         }
