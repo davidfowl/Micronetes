@@ -59,6 +59,9 @@ namespace Micronetes.Hosting
         "\r\n" +
         "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut.Start@Activity2Start:-" +
             "Request.RequestUri" +
+            ";Request.Method" +
+            ";Request.RequestUri.Host" +
+            ";Request.RequestUri.Port" +
             ";ActivityStartTime=*Activity.StartTimeUtc.Ticks" +
             ";ActivityId=*Activity.Id" +
             ";ActivitySpanId=*Activity.SpanId" +
@@ -296,6 +299,7 @@ namespace Micronetes.Hosting
                                         }
 
                                         item.Name = path;
+                                        item.Kind = SpanKind.Server;
                                         item.Attributes[SpanAttributeConstants.HttpUrlKey] = scheme + "://" + host + pathBase + path + queryString;
                                         item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
                                         item.Attributes[SpanAttributeConstants.HttpPathKey] = path;
@@ -334,7 +338,7 @@ namespace Micronetes.Hosting
                                         var spanData = new SpanData(item.Name,
                                             new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
                                             item.ParentSpanId,
-                                            SpanKind.Server,
+                                            item.Kind,
                                             item.StartTime,
                                             item.Attributes,
                                            Enumerable.Empty<Event>(),
@@ -356,6 +360,7 @@ namespace Micronetes.Hosting
                                 if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
                                 {
                                     string uri = null;
+                                    string method = null;
 
                                     foreach (var arg in arguments)
                                     {
@@ -366,11 +371,20 @@ namespace Micronetes.Hosting
                                         {
                                             uri = value;
                                         }
+                                        else if (key == "Method")
+                                        {
+                                            method = value;
+                                        }
                                     }
 
                                     if (TryCreateActivity(arguments, out var item))
                                     {
                                         item.Name = uri;
+                                        item.Kind = SpanKind.Client;
+
+                                        item.Attributes[SpanAttributeConstants.HttpUrlKey] = uri;
+                                        item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
+
                                         activities[item.Id] = item;
                                     }
                                 }
@@ -390,7 +404,7 @@ namespace Micronetes.Hosting
                                         var spanData = new SpanData(item.Name,
                                             new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
                                             item.ParentSpanId,
-                                            SpanKind.Server,
+                                            item.Kind,
                                             item.StartTime,
                                             item.Attributes,
                                            Enumerable.Empty<Event>(),
@@ -766,9 +780,9 @@ namespace Micronetes.Hosting
             public ActivityTraceId TraceId { get; set; }
             public ActivitySpanId SpanId { get; set; }
             public Dictionary<string, object> Attributes { get; } = new Dictionary<string, object>();
-
             public DateTime StartTime { get; set; }
             public DateTime EndTime { get; set; }
+            public SpanKind Kind { get; set; }
 
             public ActivitySpanId ParentSpanId { get; set; }
         }
