@@ -104,7 +104,6 @@ namespace Micronetes.Hosting
 
                 var buildResult = ProcessUtil.Run("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
                                                  outputDataReceived: data => service.Logs.OnNext(data),
-                                                 errorDataReceived: data => service.Logs.OnNext(data),
                                                  throwOnError: false);
 
                 if (buildResult.ExitCode != 0)
@@ -187,7 +186,6 @@ namespace Micronetes.Hosting
                             environmentVariables: environment,
                             workingDirectory: workingDirectory,
                             outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
-                            errorDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
                             onStart: pid =>
                             {
                                 if (hasPorts)
