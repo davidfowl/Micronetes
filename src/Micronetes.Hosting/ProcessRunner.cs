@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Micronetes.Hosting.Diagnostics;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 

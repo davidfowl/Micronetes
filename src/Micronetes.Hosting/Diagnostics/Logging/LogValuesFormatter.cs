@@ -8,7 +8,7 @@ using System.Linq;
 using System.Globalization;
 using System.Text;
 
-namespace Microsoft.Extensions.Logging
+namespace Micronetes.Hosting.Diagnostics.Logging
 {
     /// <summary>
     /// Formatter to convert the named format items like {NamedformatItem} to <see cref="M:string.Format"/> format.

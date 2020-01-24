@@ -7,21 +7,20 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Micronetes.Hosting.Logging;
-using Micronetes.Hosting.Metrics;
+using Micronetes.Hosting.Diagnostics.Logging;
+using Micronetes.Hosting.Diagnostics.Metrics;
 using Micronetes.Hosting.Model;
 using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventSource;
-using Microsoft.Hosting.Logging;
 using OpenTelemetry.Exporter.Zipkin;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Trace.Export;
 using Serilog;
 
-namespace Micronetes.Hosting
+namespace Micronetes.Hosting.Diagnostics
 {
     public class DiagnosticsCollector
     {
@@ -239,337 +238,15 @@ namespace Micronetes.Hosting
                 try
                 {
                     var source = new EventPipeEventSource(session.EventStream);
-                    var activities = new Dictionary<string, ActivityItem>();
 
-                    source.Dynamic.All += traceEvent =>
-                    {
-                        try
-                        {
-                            // Uncomment to debug the diagnostics source event source
-                            //if (traceEvent.EventName == "Message")
-                            //{
-                            //    _logger.LogTrace("[" + replicaName + "]:" + traceEvent.PayloadValue(0));
-                            //}
-                            //// Distributed tracing
-                            // else 
-                            if (traceEvent.EventName == "Activity1Start/Start")
-                            {
-                                var listenerEventName = (string)traceEvent.PayloadByName("EventName");
+                    // Distribued Tracing
+                    HandleDistributedTracingEvents(source, processor);
 
-                                if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
-                                {
-                                    if (TryCreateActivity(arguments, out var item))
-                                    {
-                                        string method = null;
-                                        string path = null;
-                                        string host = null;
-                                        string pathBase = null;
-                                        string queryString = null;
-                                        string scheme = null;
-
-                                        foreach (var arg in arguments)
-                                        {
-                                            var key = (string)arg["Key"];
-                                            var value = (string)arg["Value"];
-
-                                            if (key == "Path")
-                                            {
-                                                path = value;
-                                            }
-                                            else if (key == "Method")
-                                            {
-                                                method = value;
-                                            }
-                                            else if (key == "Host")
-                                            {
-                                                host = value;
-                                            }
-                                            else if (key == "PathBase")
-                                            {
-                                                pathBase = value;
-                                            }
-                                            else if (key == "Scheme")
-                                            {
-                                                scheme = value;
-                                            }
-                                            else if (key == "QueryString")
-                                            {
-                                                queryString = value;
-                                            }
-                                        }
-
-                                        item.Name = path;
-                                        item.Kind = SpanKind.Server;
-                                        item.Attributes[SpanAttributeConstants.HttpUrlKey] = scheme + "://" + host + pathBase + path + queryString;
-                                        item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
-                                        item.Attributes[SpanAttributeConstants.HttpPathKey] = path;
-
-                                        activities[item.Id] = item;
-                                    }
-                                }
-                            }
-                            else if (traceEvent.EventName == "Activity1Stop/Stop")
-                            {
-                                var listenerEventName = (string)traceEvent.PayloadByName("EventName");
-
-                                if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
-                                {
-                                    var (activityId, duration) = GetActivityStop(arguments);
-
-                                    int statusCode = 0;
-
-                                    foreach (var arg in arguments)
-                                    {
-                                        var key = (string)arg["Key"];
-                                        var value = (string)arg["Value"];
-
-                                        if (key == "StatusCode")
-                                        {
-                                            statusCode = int.Parse(value);
-                                        }
-                                    }
-
-                                    if (activityId != null && activities.TryGetValue(activityId, out var item))
-                                    {
-                                        item.Attributes[SpanAttributeConstants.HttpStatusCodeKey] = statusCode;
-
-                                        item.EndTime = item.StartTime + duration;
-
-                                        var spanData = new SpanData(item.Name,
-                                            new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
-                                            item.ParentSpanId,
-                                            item.Kind,
-                                            item.StartTime,
-                                            item.Attributes,
-                                           Enumerable.Empty<Event>(),
-                                           Enumerable.Empty<Link>(),
-                                           null,
-                                           Status.Ok,
-                                           item.EndTime);
-
-                                        processor.OnEnd(spanData);
-
-                                        activities.Remove(activityId);
-                                    }
-                                }
-                            }
-                            else if (traceEvent.EventName == "Activity2Start/Start")
-                            {
-                                var listenerEventName = (string)traceEvent.PayloadByName("EventName");
-
-                                if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
-                                {
-                                    string uri = null;
-                                    string method = null;
-
-                                    foreach (var arg in arguments)
-                                    {
-                                        var key = (string)arg["Key"];
-                                        var value = (string)arg["Value"];
-
-                                        if (key == "RequestUri")
-                                        {
-                                            uri = value;
-                                        }
-                                        else if (key == "Method")
-                                        {
-                                            method = value;
-                                        }
-                                    }
-
-                                    if (TryCreateActivity(arguments, out var item))
-                                    {
-                                        item.Name = uri;
-                                        item.Kind = SpanKind.Client;
-
-                                        item.Attributes[SpanAttributeConstants.HttpUrlKey] = uri;
-                                        item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
-
-                                        activities[item.Id] = item;
-                                    }
-                                }
-                            }
-                            else if (traceEvent.EventName == "Activity2Stop/Stop")
-                            {
-                                var listenerEventName = (string)traceEvent.PayloadByName("EventName");
-
-                                if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
-                                {
-                                    var (activityId, duration) = GetActivityStop(arguments);
-
-                                    if (activityId != null && activities.TryGetValue(activityId, out var item))
-                                    {
-                                        item.EndTime = item.StartTime + duration;
-
-                                        var spanData = new SpanData(item.Name,
-                                            new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
-                                            item.ParentSpanId,
-                                            item.Kind,
-                                            item.StartTime,
-                                            item.Attributes,
-                                           Enumerable.Empty<Event>(),
-                                           Enumerable.Empty<Link>(),
-                                           null,
-                                           Status.Ok,
-                                           item.EndTime);
-
-                                        processor.OnEnd(spanData);
-
-                                        activities.Remove(activityId);
-                                    }
-                                }
-                            }
-
-                            // Metrics
-                            else if (traceEvent.EventName.Equals("EventCounters"))
-                            {
-                                var payloadVal = (IDictionary<string, object>)traceEvent.PayloadValue(0);
-                                var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
-
-                                ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
-
-                                replica.Metrics[traceEvent.ProviderName + "/" + payload.Name] = payload.Value;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error processing counter for {ProviderName}:{EventName}", traceEvent.ProviderName, traceEvent.EventName);
-                        }
-                    };
+                    // Metrics
+                    HandleEventCounters(source, replica.Metrics);
 
                     // Logging
-                    string lastFormattedMessage = "";
-
-                    var logActivities = new Dictionary<Guid, LogActivityItem>();
-                    var stack = new Stack<Guid>();
-
-                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "ActivityJsonStart/Start", (traceEvent) =>
-                    {
-                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
-                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
-                        var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
-
-                        // TODO: Store this information by logger factory id
-                        var item = new LogActivityItem
-                        {
-                            ActivityID = traceEvent.ActivityID,
-                            ScopedObject = new LogObject(JsonDocument.Parse(argsJson).RootElement),
-                        };
-
-                        if (stack.TryPeek(out var parentId) && logActivities.TryGetValue(parentId, out var parentItem))
-                        {
-                            item.Parent = parentItem;
-                        }
-
-                        stack.Push(traceEvent.ActivityID);
-                        logActivities[traceEvent.ActivityID] = item;
-                    });
-
-                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "ActivityJsonStop/Stop", (traceEvent) =>
-                    {
-                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
-                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
-
-                        stack.Pop();
-                        logActivities.Remove(traceEvent.ActivityID);
-                    });
-
-                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "MessageJson", (traceEvent) =>
-                    {
-                        // Level, FactoryID, LoggerName, EventID, EventName, ExceptionJson, ArgumentsJson
-                        var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
-                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
-                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
-                        var eventId = (int)traceEvent.PayloadByName("EventId");
-                        var eventName = (string)traceEvent.PayloadByName("EventName");
-                        var exceptionJson = (string)traceEvent.PayloadByName("ExceptionJson");
-                        var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
-
-                        // There's a bug that causes some of the columns to get mixed up
-                        if (eventName.StartsWith("{"))
-                        {
-                            argsJson = exceptionJson;
-                            exceptionJson = eventName;
-                            eventName = null;
-                        }
-
-                        if (string.IsNullOrEmpty(argsJson))
-                        {
-                            return;
-                        }
-
-                        Exception exception = null;
-
-                        var logger = loggerFactory.CreateLogger(categoryName);
-
-                        var scopes = new List<IDisposable>();
-
-                        if (logActivities.TryGetValue(traceEvent.ActivityID, out var logActivityItem))
-                        {
-                            // REVIEW: Does order matter here? We're combining everything anyways.
-                            while (logActivityItem != null)
-                            {
-                                scopes.Add(logger.BeginScope(logActivityItem.ScopedObject));
-
-                                logActivityItem = logActivityItem.Parent;
-                            }
-                        }
-
-                        try
-                        {
-                            if (exceptionJson != "{}")
-                            {
-                                var exceptionMessage = JsonSerializer.Deserialize<JsonElement>(exceptionJson);
-                                exception = new LoggerException(exceptionMessage);
-                            }
-
-                            var message = JsonSerializer.Deserialize<JsonElement>(argsJson);
-                            if (message.TryGetProperty("{OriginalFormat}", out var formatElement))
-                            {
-                                var formatString = formatElement.GetString();
-                                var formatter = new LogValuesFormatter(formatString);
-                                object[] args = new object[formatter.ValueNames.Count];
-                                for (int i = 0; i < args.Length; i++)
-                                {
-                                    args[i] = message.GetProperty(formatter.ValueNames[i]).GetString();
-                                }
-
-                                logger.Log(logLevel, new EventId(eventId, eventName), exception, formatString, args);
-                            }
-                            else
-                            {
-                                var obj = new LogObject(message, lastFormattedMessage);
-                                logger.Log(logLevel, new EventId(eventId, eventName), obj, exception, LogObject.Callback);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogDebug(ex, "Error processing log entry for {ServiceName}", replicaName);
-                        }
-                        finally
-                        {
-                            scopes.ForEach(d => d.Dispose());
-                        }
-                    });
-
-                    source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "FormattedMessage", (traceEvent) =>
-                    {
-                        // Level, FactoryID, LoggerName, EventID, EventName, FormattedMessage
-                        var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
-                        var factoryId = (int)traceEvent.PayloadByName("FactoryID");
-                        var categoryName = (string)traceEvent.PayloadByName("LoggerName");
-                        var eventId = (int)traceEvent.PayloadByName("EventId");
-                        var eventName = (string)traceEvent.PayloadByName("EventName");
-                        var formattedMessage = (string)traceEvent.PayloadByName("FormattedMessage");
-
-                        if (string.IsNullOrEmpty(formattedMessage))
-                        {
-                            formattedMessage = eventName;
-                            eventName = "";
-                        }
-
-                        lastFormattedMessage = formattedMessage;
-                    });
+                    HandleLoggingEvents(source, loggerFactory, replicaName);
 
                     source.Process();
                 }
@@ -588,6 +265,344 @@ namespace Micronetes.Hosting
             }
 
             _logger.LogInformation("Event pipe collection completed for {ServiceName} on process id {PID}", replicaName, processId);
+        }
+
+        private void HandleLoggingEvents(EventPipeEventSource source, ILoggerFactory loggerFactory, string replicaName)
+        {
+            string lastFormattedMessage = "";
+
+            var logActivities = new Dictionary<Guid, LogActivityItem>();
+            var stack = new Stack<Guid>();
+
+            source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "ActivityJsonStart/Start", (traceEvent) =>
+            {
+                var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+                var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
+
+                // TODO: Store this information by logger factory id
+                var item = new LogActivityItem
+                {
+                    ActivityID = traceEvent.ActivityID,
+                    ScopedObject = new LogObject(JsonDocument.Parse(argsJson).RootElement),
+                };
+
+                if (stack.TryPeek(out var parentId) && logActivities.TryGetValue(parentId, out var parentItem))
+                {
+                    item.Parent = parentItem;
+                }
+
+                stack.Push(traceEvent.ActivityID);
+                logActivities[traceEvent.ActivityID] = item;
+            });
+
+            source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "ActivityJsonStop/Stop", (traceEvent) =>
+            {
+                var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+
+                stack.Pop();
+                logActivities.Remove(traceEvent.ActivityID);
+            });
+
+            source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "MessageJson", (traceEvent) =>
+            {
+                // Level, FactoryID, LoggerName, EventID, EventName, ExceptionJson, ArgumentsJson
+                var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
+                var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+                var eventId = (int)traceEvent.PayloadByName("EventId");
+                var eventName = (string)traceEvent.PayloadByName("EventName");
+                var exceptionJson = (string)traceEvent.PayloadByName("ExceptionJson");
+                var argsJson = (string)traceEvent.PayloadByName("ArgumentsJson");
+
+                // There's a bug that causes some of the columns to get mixed up
+                if (eventName.StartsWith("{"))
+                {
+                    argsJson = exceptionJson;
+                    exceptionJson = eventName;
+                    eventName = null;
+                }
+
+                if (string.IsNullOrEmpty(argsJson))
+                {
+                    return;
+                }
+
+                Exception exception = null;
+
+                var logger = loggerFactory.CreateLogger(categoryName);
+
+                var scopes = new List<IDisposable>();
+
+                if (logActivities.TryGetValue(traceEvent.ActivityID, out var logActivityItem))
+                {
+                    // REVIEW: Does order matter here? We're combining everything anyways.
+                    while (logActivityItem != null)
+                    {
+                        scopes.Add(logger.BeginScope(logActivityItem.ScopedObject));
+
+                        logActivityItem = logActivityItem.Parent;
+                    }
+                }
+
+                try
+                {
+                    if (exceptionJson != "{}")
+                    {
+                        var exceptionMessage = JsonSerializer.Deserialize<JsonElement>(exceptionJson);
+                        exception = new LoggerException(exceptionMessage);
+                    }
+
+                    var message = JsonSerializer.Deserialize<JsonElement>(argsJson);
+                    if (message.TryGetProperty("{OriginalFormat}", out var formatElement))
+                    {
+                        var formatString = formatElement.GetString();
+                        var formatter = new LogValuesFormatter(formatString);
+                        object[] args = new object[formatter.ValueNames.Count];
+                        for (int i = 0; i < args.Length; i++)
+                        {
+                            args[i] = message.GetProperty(formatter.ValueNames[i]).GetString();
+                        }
+
+                        logger.Log(logLevel, new EventId(eventId, eventName), exception, formatString, args);
+                    }
+                    else
+                    {
+                        var obj = new LogObject(message, lastFormattedMessage);
+                        logger.Log(logLevel, new EventId(eventId, eventName), obj, exception, LogObject.Callback);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Error processing log entry for {ServiceName}", replicaName);
+                }
+                finally
+                {
+                    scopes.ForEach(d => d.Dispose());
+                }
+            });
+
+            source.Dynamic.AddCallbackForProviderEvent(MicrosoftExtensionsLoggingProviderName, "FormattedMessage", (traceEvent) =>
+            {
+                // Level, FactoryID, LoggerName, EventID, EventName, FormattedMessage
+                var logLevel = (LogLevel)traceEvent.PayloadByName("Level");
+                var factoryId = (int)traceEvent.PayloadByName("FactoryID");
+                var categoryName = (string)traceEvent.PayloadByName("LoggerName");
+                var eventId = (int)traceEvent.PayloadByName("EventId");
+                var eventName = (string)traceEvent.PayloadByName("EventName");
+                var formattedMessage = (string)traceEvent.PayloadByName("FormattedMessage");
+
+                if (string.IsNullOrEmpty(formattedMessage))
+                {
+                    formattedMessage = eventName;
+                    eventName = "";
+                }
+
+                lastFormattedMessage = formattedMessage;
+            });
+        }
+
+        private void HandleEventCounters(EventPipeEventSource source, Dictionary<string, string> metrics)
+        {
+            source.Dynamic.All += traceEvent =>
+            {
+                try
+                {
+                    // Metrics
+                    if (traceEvent.EventName.Equals("EventCounters"))
+                    {
+                        var payloadVal = (IDictionary<string, object>)traceEvent.PayloadValue(0);
+                        var eventPayload = (IDictionary<string, object>)payloadVal["Payload"];
+
+                        ICounterPayload payload = CounterPayload.FromPayload(eventPayload);
+
+                        metrics[traceEvent.ProviderName + "/" + payload.Name] = payload.Value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing counter for {ProviderName}:{EventName}", traceEvent.ProviderName, traceEvent.EventName);
+                }
+            };
+        }
+
+        private static void HandleDistributedTracingEvents(EventPipeEventSource source, SpanProcessor processor)
+        {
+            var activities = new Dictionary<string, ActivityItem>();
+
+            source.Dynamic.All += traceEvent =>
+            {
+
+                if (traceEvent.EventName == "Activity1Start/Start")
+                {
+                    var listenerEventName = (string)traceEvent.PayloadByName("EventName");
+
+                    if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
+                    {
+                        if (TryCreateActivity(arguments, out var item))
+                        {
+                            string method = null;
+                            string path = null;
+                            string host = null;
+                            string pathBase = null;
+                            string queryString = null;
+                            string scheme = null;
+
+                            foreach (var arg in arguments)
+                            {
+                                var key = (string)arg["Key"];
+                                var value = (string)arg["Value"];
+
+                                if (key == "Path")
+                                {
+                                    path = value;
+                                }
+                                else if (key == "Method")
+                                {
+                                    method = value;
+                                }
+                                else if (key == "Host")
+                                {
+                                    host = value;
+                                }
+                                else if (key == "PathBase")
+                                {
+                                    pathBase = value;
+                                }
+                                else if (key == "Scheme")
+                                {
+                                    scheme = value;
+                                }
+                                else if (key == "QueryString")
+                                {
+                                    queryString = value;
+                                }
+                            }
+
+                            item.Name = path;
+                            item.Kind = SpanKind.Server;
+                            item.Attributes[SpanAttributeConstants.HttpUrlKey] = scheme + "://" + host + pathBase + path + queryString;
+                            item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
+                            item.Attributes[SpanAttributeConstants.HttpPathKey] = path;
+
+                            activities[item.Id] = item;
+                        }
+                    }
+                }
+
+                if (traceEvent.EventName == "Activity1Stop/Stop")
+                {
+                    var listenerEventName = (string)traceEvent.PayloadByName("EventName");
+
+                    if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
+                    {
+                        var (activityId, duration) = GetActivityStop(arguments);
+
+                        int statusCode = 0;
+
+                        foreach (var arg in arguments)
+                        {
+                            var key = (string)arg["Key"];
+                            var value = (string)arg["Value"];
+
+                            if (key == "StatusCode")
+                            {
+                                statusCode = int.Parse(value);
+                            }
+                        }
+
+                        if (activityId != null && activities.TryGetValue(activityId, out var item))
+                        {
+                            item.Attributes[SpanAttributeConstants.HttpStatusCodeKey] = statusCode;
+
+                            item.EndTime = item.StartTime + duration;
+
+                            var spanData = new SpanData(item.Name,
+                                new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
+                                item.ParentSpanId,
+                                item.Kind,
+                                item.StartTime,
+                                item.Attributes,
+                               Enumerable.Empty<Event>(),
+                               Enumerable.Empty<Link>(),
+                               null,
+                               Status.Ok,
+                               item.EndTime);
+
+                            processor.OnEnd(spanData);
+
+                            activities.Remove(activityId);
+                        }
+                    }
+                }
+                if (traceEvent.EventName == "Activity2Start/Start")
+                {
+                    var listenerEventName = (string)traceEvent.PayloadByName("EventName");
+
+                    if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
+                    {
+                        string uri = null;
+                        string method = null;
+
+                        foreach (var arg in arguments)
+                        {
+                            var key = (string)arg["Key"];
+                            var value = (string)arg["Value"];
+
+                            if (key == "RequestUri")
+                            {
+                                uri = value;
+                            }
+                            else if (key == "Method")
+                            {
+                                method = value;
+                            }
+                        }
+
+                        if (TryCreateActivity(arguments, out var item))
+                        {
+                            item.Name = uri;
+                            item.Kind = SpanKind.Client;
+
+                            item.Attributes[SpanAttributeConstants.HttpUrlKey] = uri;
+                            item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
+
+                            activities[item.Id] = item;
+                        }
+                    }
+                }
+                if (traceEvent.EventName == "Activity2Stop/Stop")
+                {
+                    var listenerEventName = (string)traceEvent.PayloadByName("EventName");
+
+                    if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
+                    {
+                        var (activityId, duration) = GetActivityStop(arguments);
+
+                        if (activityId != null && activities.TryGetValue(activityId, out var item))
+                        {
+                            item.EndTime = item.StartTime + duration;
+
+                            var spanData = new SpanData(item.Name,
+                                new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
+                                item.ParentSpanId,
+                                item.Kind,
+                                item.StartTime,
+                                item.Attributes,
+                               Enumerable.Empty<Event>(),
+                               Enumerable.Empty<Link>(),
+                               null,
+                               Status.Ok,
+                               item.EndTime);
+
+                            processor.OnEnd(spanData);
+
+                            activities.Remove(activityId);
+                        }
+                    }
+                }
+            };
         }
 
         private static (string ActivityId, TimeSpan Duration) GetActivityStop(IDictionary<string, object>[] arguments)
