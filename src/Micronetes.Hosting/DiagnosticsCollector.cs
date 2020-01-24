@@ -7,7 +7,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Micronetes.Hosting;
 using Micronetes.Hosting.Logging;
 using Micronetes.Hosting.Metrics;
 using Micronetes.Hosting.Model;
@@ -19,7 +18,6 @@ using Microsoft.Extensions.Logging.EventSource;
 using Microsoft.Hosting.Logging;
 using OpenTelemetry.Exporter.Zipkin;
 using OpenTelemetry.Trace;
-using OpenTelemetry.Trace.Configuration;
 using OpenTelemetry.Trace.Export;
 using Serilog;
 
@@ -38,7 +36,11 @@ namespace Micronetes.Hosting
         // This is the list of events for distributed tracing
         private static readonly string DiagnosticFilterString = "\"" +
           "Microsoft.AspNetCore/Microsoft.AspNetCore.Hosting.HttpRequestIn.Start@Activity1Start:-" +
-            "Request.Path" +
+            "Request.Scheme" +
+            ";Request.Host" +
+            ";Request.PathBase" +
+            ";Request.QueryString" +
+            ";Request.Path" +
             ";Request.Method" +
             ";ActivityStartTime=*Activity.StartTimeUtc.Ticks" +
             ";ActivityParentId=*Activity.ParentId" +
@@ -53,14 +55,20 @@ namespace Micronetes.Hosting
             ";ActivityDuration=*Activity.Duration.Ticks" +
             ";ActivityId=*Activity.Id" +
         "\r\n" +
+        "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut@Event:-" +
+        "\r\n" +
         "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut.Start@Activity2Start:-" +
+            "Request.RequestUri" +
             ";ActivityStartTime=*Activity.StartTimeUtc.Ticks" +
-            ";ActivityParentId=*Activity.ParentId" +
+            ";ActivityId=*Activity.Id" +
+            ";ActivitySpanId=*Activity.SpanId" +
+            ";ActivityTraceId=*Activity.TraceId" +
+            ";ActivityParentSpanId=*Activity.ParentSpanId" +
+            ";ActivityIdFormat=*Activity.IdFormat" +
             ";ActivityId=*Activity.Id" +
          "\r\n" +
         "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut.Stop@Activity2Stop:-" +
-            ";ActivityStartTime=*Activity.StartTimeUtc.Ticks" +
-            ";ActivityParentId=*Activity.ParentId" +
+            ";ActivityDuration=*Activity.Duration.Ticks" +
             ";ActivityId=*Activity.Id" +
         "\r\n" +
 
@@ -247,62 +255,53 @@ namespace Micronetes.Hosting
 
                                 if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
                                 {
-                                    string activityId = null;
-                                    string parentId = null;
-                                    string operationName = null;
-                                    string httpMethod = null;
-                                    string path = null;
-                                    string spanId = null;
-                                    string parentSpanId = null;
-                                    string traceId = null;
-                                    DateTime startTime = default;
-                                    ActivityIdFormat idFormat = default;
-
-                                    foreach (var arg in arguments)
+                                    if (TryCreateActivity(arguments, out var item))
                                     {
-                                        var key = (string)arg["Key"];
-                                        var value = (string)arg["Value"];
+                                        string method = null;
+                                        string path = null;
+                                        string host = null;
+                                        string pathBase = null;
+                                        string queryString = null;
+                                        string scheme = null;
 
-                                        if (key == "ActivityId") activityId = value;
-                                        else if (key == "ActivityParentId") parentId = value;
-                                        else if (key == "ActivityOperationName") operationName = value;
-                                        else if (key == "ActivitySpanId") spanId = value;
-                                        else if (key == "ActivityTraceId") traceId = value;
-                                        else if (key == "ActivityParentSpanId") parentSpanId = value;
-                                        else if (key == "Method") httpMethod = value;
-                                        else if (key == "Path") path = value;
-                                        else if (key == "ActivityStartTime") startTime = new DateTime(long.Parse(value), DateTimeKind.Utc);
-                                        else if (key == "ActivityIdFormat") idFormat = Enum.Parse<ActivityIdFormat>(value);
+                                        foreach (var arg in arguments)
+                                        {
+                                            var key = (string)arg["Key"];
+                                            var value = (string)arg["Value"];
+
+                                            if (key == "Path")
+                                            {
+                                                path = value;
+                                            }
+                                            else if (key == "Method")
+                                            {
+                                                method = value;
+                                            }
+                                            else if (key == "Host")
+                                            {
+                                                host = value;
+                                            }
+                                            else if (key == "PathBase")
+                                            {
+                                                pathBase = value;
+                                            }
+                                            else if (key == "Scheme")
+                                            {
+                                                scheme = value;
+                                            }
+                                            else if (key == "QueryString")
+                                            {
+                                                queryString = value;
+                                            }
+                                        }
+
+                                        item.Name = path;
+                                        item.Attributes[SpanAttributeConstants.HttpUrlKey] = scheme + "://" + host + pathBase + path + queryString;
+                                        item.Attributes[SpanAttributeConstants.HttpMethodKey] = method;
+                                        item.Attributes[SpanAttributeConstants.HttpPathKey] = path;
+
+                                        activities[item.Id] = item;
                                     }
-
-                                    if (string.IsNullOrEmpty(activityId))
-                                    {
-                                        // Not a 3.1 application (we can detect this earlier)
-                                        return;
-                                    }
-
-                                    if (idFormat == ActivityIdFormat.Hierarchical)
-                                    {
-                                        // We need W3C to make it work
-                                        return;
-                                    }
-
-                                    // This is what open telemetry currently does
-                                    // https://github.com/open-telemetry/opentelemetry-dotnet/blob/4ba732af062ddc2759c02aebbc91335aaa3f7173/src/OpenTelemetry.Collector.AspNetCore/Implementation/HttpInListener.cs#L65-L92
-
-                                    var item = new ActivityItem()
-                                    {
-                                        Name = path,
-                                        SpanId = ActivitySpanId.CreateFromString(spanId),
-                                        TraceId = ActivityTraceId.CreateFromString(traceId),
-                                        ParentSpanId = parentSpanId == "0000000000000000" ? default : ActivitySpanId.CreateFromString(parentSpanId),
-                                        StartTime = startTime,
-                                    };
-
-                                    item.Attributes[SpanAttributeConstants.HttpMethodKey] = httpMethod;
-                                    item.Attributes[SpanAttributeConstants.HttpPathKey] = path;
-
-                                    activities[activityId] = item;
                                 }
                             }
                             else if (traceEvent.EventName == "Activity1Stop/Stop")
@@ -311,8 +310,8 @@ namespace Micronetes.Hosting
 
                                 if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
                                 {
-                                    string activityId = null;
-                                    TimeSpan duration = default;
+                                    var (activityId, duration) = GetActivityStop(arguments);
+
                                     int statusCode = 0;
 
                                     foreach (var arg in arguments)
@@ -320,18 +319,13 @@ namespace Micronetes.Hosting
                                         var key = (string)arg["Key"];
                                         var value = (string)arg["Value"];
 
-                                        if (key == "ActivityId") activityId = value;
-                                        else if (key == "StatusCode") statusCode = int.Parse(value);
-                                        else if (key == "ActivityDuration") duration = new TimeSpan(long.Parse(value));
+                                        if (key == "StatusCode")
+                                        {
+                                            statusCode = int.Parse(value);
+                                        }
                                     }
 
-                                    if (string.IsNullOrEmpty(activityId))
-                                    {
-                                        // Not a 3.1 application (we can detect this earlier)
-                                        return;
-                                    }
-
-                                    if (activities.TryGetValue(activityId, out var item))
+                                    if (activityId != null && activities.TryGetValue(activityId, out var item))
                                     {
                                         item.Attributes[SpanAttributeConstants.HttpStatusCodeKey] = statusCode;
 
@@ -359,13 +353,57 @@ namespace Micronetes.Hosting
                             {
                                 var listenerEventName = (string)traceEvent.PayloadByName("EventName");
 
-                                _logger.LogDebug("[" + replicaName + "]: " + listenerEventName + " fired");
+                                if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
+                                {
+                                    string uri = null;
+
+                                    foreach (var arg in arguments)
+                                    {
+                                        var key = (string)arg["Key"];
+                                        var value = (string)arg["Value"];
+
+                                        if (key == "RequestUri")
+                                        {
+                                            uri = value;
+                                        }
+                                    }
+
+                                    if (TryCreateActivity(arguments, out var item))
+                                    {
+                                        item.Name = uri;
+                                        activities[item.Id] = item;
+                                    }
+                                }
                             }
                             else if (traceEvent.EventName == "Activity2Stop/Stop")
                             {
                                 var listenerEventName = (string)traceEvent.PayloadByName("EventName");
 
-                                _logger.LogDebug("[" + replicaName + "]: " + listenerEventName + " fired");
+                                if (traceEvent.PayloadByName("Arguments") is IDictionary<string, object>[] arguments)
+                                {
+                                    var (activityId, duration) = GetActivityStop(arguments);
+
+                                    if (activityId != null && activities.TryGetValue(activityId, out var item))
+                                    {
+                                        item.EndTime = item.StartTime + duration;
+
+                                        var spanData = new SpanData(item.Name,
+                                            new SpanContext(item.TraceId, item.SpanId, ActivityTraceFlags.Recorded),
+                                            item.ParentSpanId,
+                                            SpanKind.Server,
+                                            item.StartTime,
+                                            item.Attributes,
+                                           Enumerable.Empty<Event>(),
+                                           Enumerable.Empty<Link>(),
+                                           null,
+                                           Status.Ok,
+                                           item.EndTime);
+
+                                        processor.OnEnd(spanData);
+
+                                        activities.Remove(activityId);
+                                    }
+                                }
                             }
 
                             // Metrics
@@ -538,6 +576,104 @@ namespace Micronetes.Hosting
             _logger.LogInformation("Event pipe collection completed for {ServiceName} on process id {PID}", replicaName, processId);
         }
 
+        private static (string ActivityId, TimeSpan Duration) GetActivityStop(IDictionary<string, object>[] arguments)
+        {
+            var activityId = default(string);
+            var duration = default(TimeSpan);
+
+            foreach (var arg in arguments)
+            {
+                var key = (string)arg["Key"];
+                var value = (string)arg["Value"];
+
+                if (key == "ActivityId")
+                {
+                    activityId = value;
+                }
+                else if (key == "ActivityDuration")
+                {
+                    duration = new TimeSpan(long.Parse(value));
+                }
+            }
+
+            return (activityId, duration);
+        }
+
+        private static bool TryCreateActivity(IDictionary<string, object>[] arguments, out ActivityItem item)
+        {
+            string activityId = null;
+            string operationName = null;
+            string spanId = null;
+            string parentSpanId = null;
+            string traceId = null;
+            DateTime startTime = default;
+            ActivityIdFormat idFormat = default;
+
+            foreach (var arg in arguments)
+            {
+                var key = (string)arg["Key"];
+                var value = (string)arg["Value"];
+
+                if (key == "ActivityId")
+                {
+                    activityId = value;
+                }
+                else if (key == "ActivityOperationName")
+                {
+                    operationName = value;
+                }
+                else if (key == "ActivitySpanId")
+                {
+                    spanId = value;
+                }
+                else if (key == "ActivityTraceId")
+                {
+                    traceId = value;
+                }
+                else if (key == "ActivityParentSpanId")
+                {
+                    parentSpanId = value;
+                }
+                else if (key == "ActivityStartTime")
+                {
+                    startTime = new DateTime(long.Parse(value), DateTimeKind.Utc);
+                }
+                else if (key == "ActivityIdFormat")
+                {
+                    idFormat = Enum.Parse<ActivityIdFormat>(value);
+                }
+            }
+
+            if (string.IsNullOrEmpty(activityId))
+            {
+                item = null;
+                // Not a 3.1 application (we can detect this earlier)
+                return false;
+            }
+
+            if (idFormat == ActivityIdFormat.Hierarchical)
+            {
+                // We need W3C to make it work
+                item = null;
+                return false;
+            }
+
+            // This is what open telemetry currently does
+            // https://github.com/open-telemetry/opentelemetry-dotnet/blob/4ba732af062ddc2759c02aebbc91335aaa3f7173/src/OpenTelemetry.Collector.AspNetCore/Implementation/HttpInListener.cs#L65-L92
+
+            item = new ActivityItem()
+            {
+                Id = activityId,
+                Name = operationName,
+                SpanId = ActivitySpanId.CreateFromString(spanId),
+                TraceId = ActivityTraceId.CreateFromString(traceId),
+                ParentSpanId = parentSpanId == "0000000000000000" ? default : ActivitySpanId.CreateFromString(parentSpanId),
+                StartTime = startTime,
+            };
+
+            return true;
+        }
+
         // This is the logger factory for application logs. It allows re-routing event pipe collected logs (structured logs)
         // to any of the supported sinks, currently (elastic search and app insights)
         private void ConfigureLogging(string serviceName, string replicaName, ILoggingBuilder builder)
@@ -598,7 +734,7 @@ namespace Micronetes.Hosting
                 var zipkin = new ZipkinTraceExporter(new ZipkinTraceExporterOptions
                 {
                     ServiceName = serviceName,
-                    Endpoint = new Uri($"{_options.DistributedTraceProvider.Value}/api/v2/spans")
+                    Endpoint = new Uri($"{_options.DistributedTraceProvider.Value.TrimEnd('/')}/api/v2/spans")
                 });
 
                 return zipkin;
@@ -625,6 +761,7 @@ namespace Micronetes.Hosting
 
         private class ActivityItem
         {
+            public string Id { get; set; }
             public string Name { get; set; }
             public ActivityTraceId TraceId { get; set; }
             public ActivitySpanId SpanId { get; set; }
