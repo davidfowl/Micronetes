@@ -41,7 +41,7 @@ namespace Micronetes.Hosting
             foreach (var s in services.Values)
             {
                 var state = s;
-                tasks[index++] = Task.Run(() => StopContainer(state));
+                tasks[index++] = StopContainerAsync(state);
             }
 
             return Task.WhenAll(tasks);
@@ -67,7 +67,7 @@ namespace Micronetes.Hosting
 
             var dockerInfo = new DockerInformation()
             {
-                Threads = new Thread[service.Description.Replicas.Value]
+                Tasks = new Task[service.Description.Replicas.Value]
             };
 
             void RunDockerContainer(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
@@ -207,20 +207,20 @@ namespace Micronetes.Hosting
                         ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
-                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(ports));
+                    dockerInfo.Tasks[i] = new Task(() => RunDockerContainer(ports), TaskCreationOptions.LongRunning);
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(Enumerable.Empty<(int, int, string)>()));
+                    dockerInfo.Tasks[i] = new Task(() => RunDockerContainer(Enumerable.Empty<(int, int, string)>()), TaskCreationOptions.LongRunning);
                 }
             }
 
             for (int i = 0; i < service.Description.Replicas; i++)
             {
-                dockerInfo.Threads[i].Start();
+                dockerInfo.Tasks[i].Start();
             }
 
             service.Items[typeof(DockerInformation)] = dockerInfo;
@@ -244,16 +244,13 @@ namespace Micronetes.Hosting
             }
         }
 
-        private void StopContainer(Service service)
+        private async Task StopContainerAsync(Service service)
         {
             if (service.Items.TryGetValue(typeof(DockerInformation), out var value) && value is DockerInformation di)
             {
                 di.StoppingTokenSource.Cancel();
 
-                foreach (var t in di.Threads)
-                {
-                    t.Join();
-                }
+                await Task.WhenAll(di.Tasks);
             }
         }
 
@@ -275,7 +272,7 @@ namespace Micronetes.Hosting
 
         private class DockerInformation
         {
-            public Thread[] Threads { get; set; }
+            public Task[] Tasks { get; set; }
             public CancellationTokenSource StoppingTokenSource { get; set; } = new CancellationTokenSource();
         }
     }

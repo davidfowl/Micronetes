@@ -91,7 +91,7 @@ namespace Micronetes.Hosting
 
             var processInfo = new ProcessInfo
             {
-                Threads = new Thread[service.Description.Replicas.Value]
+                Tasks = new Task[service.Description.Replicas.Value]
             };
 
             if (service.Status.ProjectFilePath != null && service.Description.Build.GetValueOrDefault() && _buildProjects)
@@ -231,20 +231,20 @@ namespace Micronetes.Hosting
                         ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
-                    processInfo.Threads[i] = new Thread(() => RunApplication(ports));
+                    processInfo.Tasks[i] = new Task(() => RunApplication(ports), TaskCreationOptions.LongRunning);
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<(int, int, string)>()));
+                    processInfo.Tasks[i] = new Task(() => RunApplication(Enumerable.Empty<(int, int, string)>()), TaskCreationOptions.LongRunning);
                 }
             }
 
             for (int i = 0; i < service.Description.Replicas; i++)
             {
-                processInfo.Threads[i].Start();
+                processInfo.Tasks[i].Start();
             }
 
             service.Items[typeof(ProcessInfo)] = processInfo;
@@ -254,16 +254,14 @@ namespace Micronetes.Hosting
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)
         {
-            static void KillProcess(Service service)
+            static async Task KillProcessAsync(Service service)
             {
                 if (service.Items.TryGetValue(typeof(ProcessInfo), out var stateObj) && stateObj is ProcessInfo state)
                 {
                     // Cancel the token before stopping the process
                     state.StoppedTokenSource.Cancel();
-                    foreach (var t in state.Threads)
-                    {
-                        t.Join();
-                    }
+
+                    await Task.WhenAll(state.Tasks);
                 }
             }
 
@@ -272,7 +270,7 @@ namespace Micronetes.Hosting
             foreach (var s in services.Values)
             {
                 var state = s;
-                tasks[index++] = Task.Run(() => KillProcess(state));
+                tasks[index++] = KillProcessAsync(state);
             }
 
             return Task.WhenAll(tasks);
@@ -306,7 +304,7 @@ namespace Micronetes.Hosting
 
         private class ProcessInfo
         {
-            public Thread[] Threads { get; set; }
+            public Task[] Tasks { get; set; }
 
             public CancellationTokenSource StoppedTokenSource { get; set; } = new CancellationTokenSource();
         }
