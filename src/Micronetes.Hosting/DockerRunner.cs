@@ -119,7 +119,12 @@ namespace Micronetes.Hosting
 
                 status.DockerCommand = command;
 
-                var result = await ProcessUtil.RunAsync("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
+                var result = await ProcessUtil.RunAsync(
+                    "docker",
+                    command,
+                    throwOnError: false,
+                    cancellationToken: dockerInfo.StoppingTokenSource.Token,
+                    outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"));
 
                 if (result.ExitCode != 0)
                 {
