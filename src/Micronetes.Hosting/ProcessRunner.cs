@@ -40,13 +40,13 @@ namespace Micronetes.Hosting
             return KillRunningProcesses(application.Services);
         }
 
-        private Task LaunchService(Application application, Service service)
+        private async Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
 
             if (serviceDescription.DockerImage != null)
             {
-                return Task.CompletedTask;
+                return;
             }
 
             var serviceName = serviceDescription.Name;
@@ -100,18 +100,18 @@ namespace Micronetes.Hosting
 
                 service.Logs.OnNext($"dotnet build \"{service.Status.ProjectFilePath}\" /nologo");
 
-                var buildResult = ProcessUtil.Run("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
-                                                 outputDataReceived: data => service.Logs.OnNext(data),
-                                                 throwOnError: false);
+                var buildResult = await ProcessUtil.RunAsync("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
+                                                            outputDataReceived: data => service.Logs.OnNext(data),
+                                                            throwOnError: false);
 
                 if (buildResult.ExitCode != 0)
                 {
                     _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardOutput + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
-                    return Task.CompletedTask;
+                    return;
                 }
             }
 
-            void RunApplication(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
+            async Task RunApplicationAsync(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
 
@@ -165,7 +165,7 @@ namespace Micronetes.Hosting
                     {
                         service.Logs.OnNext($"[{replica}]:{path} {args}");
 
-                        var result = ProcessUtil.Run(path, args,
+                        var result = await ProcessUtil.RunAsync(path, args,
                             environmentVariables: environment,
                             workingDirectory: workingDirectory,
                             outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
@@ -231,25 +231,18 @@ namespace Micronetes.Hosting
                         ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
-                    processInfo.Tasks[i] = new Task(() => RunApplication(ports), TaskCreationOptions.LongRunning);
+                    processInfo.Tasks[i] = RunApplicationAsync(ports);
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    processInfo.Tasks[i] = new Task(() => RunApplication(Enumerable.Empty<(int, int, string)>()), TaskCreationOptions.LongRunning);
+                    processInfo.Tasks[i] = RunApplicationAsync(Enumerable.Empty<(int, int, string)>());
                 }
             }
 
-            for (int i = 0; i < service.Description.Replicas; i++)
-            {
-                processInfo.Tasks[i].Start();
-            }
-
             service.Items[typeof(ProcessInfo)] = processInfo;
-
-            return Task.CompletedTask;
         }
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)

@@ -6,21 +6,20 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Mono.Unix.Native;
 
 namespace Micronetes.Hosting
 {
     internal static class ProcessUtil
     {
-        public static ProcessResult Run(
+        public static async Task<ProcessResult> RunAsync(
             string filename,
             string arguments,
-            TimeSpan? timeout = null,
             string workingDirectory = null,
             bool throwOnError = true,
             IDictionary<string, string> environmentVariables = null,
             Action<string> outputDataReceived = null,
             Action<string> errorDataReceived = null,
-            bool log = false,
             Action<int> onStart = null,
             CancellationToken cancellationToken = default)
         {
@@ -35,6 +34,7 @@ namespace Micronetes.Hosting
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 },
+                EnableRaisingEvents = true
             };
 
             using (process)
@@ -88,88 +88,56 @@ namespace Micronetes.Hosting
                     }
                 };
 
+                var tcs = new TaskCompletionSource<ProcessResult>();
+
+                process.Exited += (_, e) =>
+                {
+                    if (throwOnError && process.ExitCode != 0)
+                    {
+                        tcs.TrySetException(new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}"));
+                    }
+                    else
+                    {
+                        tcs.TrySetResult(new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode));
+                    }
+                };
+
                 process.Start();
                 onStart?.Invoke(process.Id);
 
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                var start = DateTime.UtcNow;
+                var cancelledTcs = new TaskCompletionSource<object>();
+                using var _ = cancellationToken.Register(() => cancelledTcs.TrySetResult(null));
 
-                while (true)
+                var result = await Task.WhenAny(tcs.Task, cancelledTcs.Task);
+
+                if (result == cancelledTcs.Task)
                 {
-                    if (cancellationToken.IsCancellationRequested)
+                    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     {
-                        StopProcess(process);
-                        break;
+                        Syscall.kill(process.Id, Signum.SIGTERM);
+
+                        var cancel = new CancellationTokenSource();
+
+                        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5), cancel.Token));
+                        
+                        cancel.Cancel();
                     }
 
-                    if (timeout.HasValue && (DateTime.UtcNow - start > timeout.Value))
+                    if (!process.HasExited)
                     {
-                        StopProcess(process);
-                        break;
-                    }
+                        process.CloseMainWindow();
 
-                    if (process.HasExited)
-                    {
-                        break;
+                        if (!process.HasExited)
+                        {
+                            process.Kill();
+                        }
                     }
-
-                    Thread.Sleep(500);
                 }
 
-                if (throwOnError && process.ExitCode != 0)
-                {
-                    throw new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}");
-                }
-
-                return new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode);
-            }
-        }
-
-        public static void StopProcess(Process process)
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                Mono.Unix.Native.Syscall.kill(process.Id, Mono.Unix.Native.Signum.SIGINT);
-
-                // Tentatively invoke SIGINT
-                var waitForShutdownDelay = Task.Delay(TimeSpan.FromSeconds(5));
-                while (!process.HasExited && !waitForShutdownDelay.IsCompletedSuccessfully)
-                {
-                    Thread.Sleep(200);
-                }
-            }
-
-            if (!process.HasExited)
-            {
-                // Log.WriteLine($"Forcing process to stop ...");
-                process.CloseMainWindow();
-
-                if (!process.HasExited)
-                {
-                    process.Kill();
-                }
-
-                // process.Dispose();
-
-                do
-                {
-                    // Log.WriteLine($"Waiting for process {process.Id} to stop ...");
-
-                    Thread.Sleep(1000);
-
-                    try
-                    {
-                        process = Process.GetProcessById(process.Id);
-                        process.Refresh();
-                    }
-                    catch
-                    {
-                        process = null;
-                    }
-
-                } while (process != null && !process.HasExited);
+                return await tcs.Task;
             }
         }
     }

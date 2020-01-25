@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +11,7 @@ namespace Micronetes.Hosting
     public class DockerRunner : IApplicationProcessor
     {
         private readonly ILogger _logger;
-        private readonly Lazy<bool> _dockerInstalled = new Lazy<bool>(DetectDockerInstalled);
+        private readonly Lazy<Task<bool>> _dockerInstalled = new Lazy<Task<bool>>(DetectDockerInstalled);
 
         public DockerRunner(ILogger logger)
         {
@@ -47,19 +45,19 @@ namespace Micronetes.Hosting
             return Task.WhenAll(tasks);
         }
 
-        private Task StartContainerAsync(Application application, Service service)
+        private async Task StartContainerAsync(Application application, Service service)
         {
             if (service.Description.DockerImage == null)
             {
-                return Task.CompletedTask;
+                return;
             }
 
-            if (!_dockerInstalled.Value)
+            if (!await _dockerInstalled.Value)
             {
                 _logger.LogError("Unable to start docker container for service {ServiceName}, Docker is not installed.", service.Description.Name);
 
                 service.Logs.OnNext($"Unable to start docker container for service {service.Description.Name}, Docker is not installed.");
-                return Task.CompletedTask;
+                return;
             }
 
             var serviceDescription = service.Description;
@@ -70,7 +68,7 @@ namespace Micronetes.Hosting
                 Tasks = new Task[service.Description.Replicas.Value]
             };
 
-            void RunDockerContainer(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
+            async Task RunDockerContainer(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
 
@@ -121,7 +119,7 @@ namespace Micronetes.Hosting
 
                 status.DockerCommand = command;
 
-                var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
+                var result = await ProcessUtil.RunAsync("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
                 if (result.ExitCode != 0)
                 {
@@ -140,7 +138,7 @@ namespace Micronetes.Hosting
                 while (string.IsNullOrEmpty(containerId))
                 {
                     // Try to get the ID of the container
-                    result = ProcessUtil.Run("docker", $"ps --no-trunc -f name={replica} --format " + "{{.ID}}");
+                    result = await ProcessUtil.RunAsync("docker", $"ps --no-trunc -f name={replica} --format " + "{{.ID}}");
 
                     containerId = result.ExitCode == 0 ? result.StandardOutput.Trim() : null;
                 }
@@ -155,7 +153,7 @@ namespace Micronetes.Hosting
 
                 _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
-                ProcessUtil.Run("docker", $"logs -f {containerId}",
+                await ProcessUtil.RunAsync("docker", $"logs -f {containerId}",
                     outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
                     onStart: pid =>
                     {
@@ -171,7 +169,7 @@ namespace Micronetes.Hosting
 
                 _logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+                result = await ProcessUtil.RunAsync("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
                 PrintStdOutAndErr(service, replica, result);
 
@@ -179,7 +177,7 @@ namespace Micronetes.Hosting
 
                 _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
-                result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+                result = await ProcessUtil.RunAsync("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
                 PrintStdOutAndErr(service, replica, result);
 
@@ -207,25 +205,18 @@ namespace Micronetes.Hosting
                         ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
-                    dockerInfo.Tasks[i] = new Task(() => RunDockerContainer(ports), TaskCreationOptions.LongRunning);
+                    dockerInfo.Tasks[i] = RunDockerContainer(ports);
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    dockerInfo.Tasks[i] = new Task(() => RunDockerContainer(Enumerable.Empty<(int, int, string)>()), TaskCreationOptions.LongRunning);
+                    dockerInfo.Tasks[i] = RunDockerContainer(Enumerable.Empty<(int, int, string)>());
                 }
             }
 
-            for (int i = 0; i < service.Description.Replicas; i++)
-            {
-                dockerInfo.Tasks[i].Start();
-            }
-
             service.Items[typeof(DockerInformation)] = dockerInfo;
-
-            return Task.CompletedTask;
         }
 
         private static void PrintStdOutAndErr(Service service, string replica, ProcessResult result)
@@ -254,12 +245,12 @@ namespace Micronetes.Hosting
             }
         }
 
-        private static bool DetectDockerInstalled()
+        private static async Task<bool> DetectDockerInstalled()
         {
             // Detect Docker installation
             try
             {
-                ProcessUtil.Run("docker", "version", throwOnError: false);
+                await ProcessUtil.RunAsync("docker", "version", throwOnError: false);
                 return true;
             }
             catch (Exception)
