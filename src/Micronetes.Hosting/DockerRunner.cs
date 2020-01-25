@@ -68,7 +68,7 @@ namespace Micronetes.Hosting
                 Tasks = new Task[service.Description.Replicas.Value]
             };
 
-            async Task RunDockerContainer(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
+            async Task RunDockerContainer(IEnumerable<(int Port, int? InternalPort, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
 
@@ -92,10 +92,7 @@ namespace Micronetes.Hosting
                 {
                     status.Ports = ports.Select(p => p.Port);
 
-                    portString = string.Join(" ", ports.Select(p => $"-p {p.Port}:{p.Port}"));
-
-                    // These ports should also be passed in not assuming ASP.NET Core
-                    environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"{p.Protocol ?? "http"}://*:{p.Port}"));
+                    portString = string.Join(" ", ports.Select(p => $"-p {p.Port}:{p.InternalPort ?? p.Port}"));
 
                     foreach (var p in ports)
                     {
@@ -199,7 +196,7 @@ namespace Micronetes.Hosting
                 // port
                 for (int i = 0; i < serviceDescription.Replicas; i++)
                 {
-                    var ports = new List<(int, int, string)>();
+                    var ports = new List<(int, int?, int, string)>();
                     foreach (var binding in serviceDescription.Bindings)
                     {
                         if (binding.Port == null)
@@ -207,7 +204,7 @@ namespace Micronetes.Hosting
                             continue;
                         }
 
-                        ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
+                        ports.Add((service.PortMap[binding.Port.Value][i], binding.InternalPort, binding.Port.Value, binding.Protocol));
                     }
 
                     dockerInfo.Tasks[i] = RunDockerContainer(ports);
@@ -217,7 +214,7 @@ namespace Micronetes.Hosting
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    dockerInfo.Tasks[i] = RunDockerContainer(Enumerable.Empty<(int, int, string)>());
+                    dockerInfo.Tasks[i] = RunDockerContainer(Enumerable.Empty<(int, int?, int, string)>());
                 }
             }
 
