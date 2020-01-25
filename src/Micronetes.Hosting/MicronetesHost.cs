@@ -76,9 +76,10 @@ namespace Micronetes.Hosting
             diagnosticOptions.DumpDiagnostics(logger);
 
             var processor = new AggregateApplicationProcessor(new IApplicationProcessor[] {
+                new EventPipeDiagnosticsRunner(logger, diagnosticsCollector),
                 new ProxyService(logger),
                 new DockerRunner(logger),
-                new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args), diagnosticsCollector),
+                new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args)),
             });
 
             await app.StartAsync();

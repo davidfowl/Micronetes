@@ -75,8 +75,10 @@ namespace Micronetes.Hosting
                 var hasPorts = ports.Any();
 
                 var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                var status = new DockerStatus();
+                var status = new DockerStatus(service, replica);
                 service.Replicas[replica] = status;
+
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Added, status));
 
                 var environment = new Dictionary<string, string>
                 {
@@ -125,6 +127,7 @@ namespace Micronetes.Hosting
                 {
                     _logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
                     service.Replicas.TryRemove(replica, out _);
+                    service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Removed, status));
 
                     PrintStdOutAndErr(service, replica, result);
                     return;
@@ -148,6 +151,8 @@ namespace Micronetes.Hosting
 
                 _logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Started, status));
+
                 _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
                 ProcessUtil.Run("docker", $"logs -f {containerId}",
@@ -170,6 +175,8 @@ namespace Micronetes.Hosting
 
                 PrintStdOutAndErr(service, replica, result);
 
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Stopped, status));
+
                 _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
                 result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
@@ -179,6 +186,8 @@ namespace Micronetes.Hosting
                 _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
                 service.Replicas.TryRemove(replica, out _);
+
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Removed, status));
             };
 
             if (serviceDescription.Bindings.Count > 0)

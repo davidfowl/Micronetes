@@ -58,7 +58,30 @@ namespace Micronetes.Hosting.Model
         public Queue<string> CachedLogs { get; } = new Queue<string>();
 
         [JsonIgnore]
-        public Subject<string> Logs { get; set; } = new Subject<string>();
+        public Subject<string> Logs { get; } = new Subject<string>();
+
+        [JsonIgnore]
+        public Subject<ReplicaEvent> ReplicaEvents { get; } = new Subject<ReplicaEvent>();
+    }
+
+    public readonly struct ReplicaEvent
+    {
+        public ReplicaState State { get; }
+        public ReplicaStatus Replica { get; }
+
+        public ReplicaEvent(ReplicaState state, ReplicaStatus replica)
+        {
+            State = state;
+            Replica = replica;
+        }
+    }
+
+    public enum ReplicaState
+    {
+        Removed,
+        Added,
+        Started,
+        Stopped,
     }
 
     public class ServiceStatus
@@ -71,6 +94,9 @@ namespace Micronetes.Hosting.Model
 
     public class ProcessStatus : ReplicaStatus
     {
+        public ProcessStatus(Service service, string name) : base(service, name)
+        {
+        }
         public int? ExitCode { get; set; }
         public int? Pid { get; set; }
         public IDictionary<string, string> Environment { get; set; }
@@ -78,6 +104,10 @@ namespace Micronetes.Hosting.Model
 
     public class DockerStatus : ReplicaStatus
     {
+        public DockerStatus(Service service, string name) : base(service, name)
+        {
+        }
+
         public string DockerCommand { get; set; }
 
         public string ContainerId { get; set; }
@@ -87,9 +117,23 @@ namespace Micronetes.Hosting.Model
 
     public class ReplicaStatus
     {
+        public ReplicaStatus(Service service, string name)
+        {
+            Service = service;
+            Name = name;
+        }
+
+        public string Name { get; }
+
         public static JsonConverter<ReplicaStatus> JsonConverter = new Converter();
 
         public IEnumerable<int> Ports { get; set; }
+
+        [JsonIgnore]
+        public Service Service { get; }
+
+        [JsonIgnore]
+        public Dictionary<object, object> Items { get; } = new Dictionary<object, object>();
 
         [JsonIgnore]
         public Dictionary<string, string> Metrics { get; set; } = new Dictionary<string, string>();

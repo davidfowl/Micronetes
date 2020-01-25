@@ -1,5 +1,6 @@
 ﻿@page "/"
 @inject Application application
+@implements IDisposable
 
 <h1>Services</h1>
 <table class="table">
@@ -73,8 +74,31 @@
 </table>
 
 @code {
+
+    private List<IDisposable> _subscriptions = new List<IDisposable>();
+
     string GetUrl(ServiceBinding b)
     {
         return $"{(b.Protocol ?? "http")}://{b.Host ?? "localhost"}:{b.Port}";
+    }
+
+    protected override void OnInitialized()
+    {
+        foreach (var a in application.Services.Values)
+        {
+            _subscriptions.Add(a.ReplicaEvents.Subscribe(OnReplicaChanged));
+        }
+
+        base.OnInitialized();
+    }
+
+    private void OnReplicaChanged(ReplicaEvent replicaEvent)
+    {
+        InvokeAsync(() => StateHasChanged());
+    }
+
+    void IDisposable.Dispose()
+    {
+        _subscriptions.ForEach(d => d.Dispose());
     }
 }

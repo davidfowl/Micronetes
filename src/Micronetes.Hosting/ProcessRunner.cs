@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Micronetes.Hosting.Diagnostics;
 using Micronetes.Hosting.Model;
 using Microsoft.Extensions.Logging;
 
@@ -16,14 +15,12 @@ namespace Micronetes.Hosting
         private readonly ILogger _logger;
         private readonly bool _debugMode;
         private readonly bool _buildProjects;
-        private DiagnosticsCollector _diagnosticsCollector;
 
-        public ProcessRunner(ILogger logger, ProcessRunnerOptions options, DiagnosticsCollector diagnosticsCollector)
+        public ProcessRunner(ILogger logger, ProcessRunnerOptions options)
         {
             _logger = logger;
             _debugMode = options.DebugMode;
             _buildProjects = options.BuildProjects;
-            _diagnosticsCollector = diagnosticsCollector;
         }
 
         public Task StartAsync(Application application)
@@ -145,8 +142,10 @@ namespace Micronetes.Hosting
                 while (!processInfo.StoppedTokenSource.IsCancellationRequested)
                 {
                     var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                    var status = new ProcessStatus();
+                    var status = new ProcessStatus(service, replica);
                     service.Replicas[replica] = status;
+
+                    service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Added, status));
 
                     // This isn't your host name
                     environment["APP_INSTANCE"] = replica;
@@ -161,23 +160,6 @@ namespace Micronetes.Hosting
                     }
 
                     _logger.LogInformation("Launching service {ServiceName}: {ExePath} {args}", replica, path, args);
-
-                    var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
-
-                    // This is the thread that will collect diagnostics from the running process
-                    // - Logs - I'll collect structured logs from Microsoft.Extensions.Logging
-                    // - Metrics - It'll collect EventCounters
-                    // - Distribued Traces - It'll create spans
-                    var diagnosticsThread = new Thread(state =>
-                    {
-                        _diagnosticsCollector.ProcessEvents(
-                            applicationName,
-                            service.Description.Name,
-                            (int)state,
-                            replica,
-                            status.Metrics,
-                            metricsTokenSource.Token);
-                    });
 
                     try
                     {
@@ -200,7 +182,7 @@ namespace Micronetes.Hosting
 
                                 status.Pid = pid;
 
-                                diagnosticsThread.Start(pid);
+                                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Started, status));
                             },
                             throwOnError: false,
                             cancellationToken: processInfo.StoppedTokenSource.Token);
@@ -209,9 +191,7 @@ namespace Micronetes.Hosting
 
                         if (status.Pid != null)
                         {
-                            metricsTokenSource.Cancel();
-
-                            diagnosticsThread.Join();
+                            service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Stopped, status));
                         }
                     }
                     catch (Exception ex)
@@ -230,6 +210,7 @@ namespace Micronetes.Hosting
 
                     // Remove the replica from the set
                     service.Replicas.TryRemove(replica, out _);
+                    service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Removed, status));
                 }
             }
 
