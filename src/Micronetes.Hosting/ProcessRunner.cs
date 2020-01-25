@@ -54,7 +54,6 @@ namespace Micronetes.Hosting
             var path = "";
             var workingDirectory = "";
             var args = service.Description.Args ?? "";
-            var applicationName = "";
 
             if (serviceDescription.Project != null)
             {
@@ -62,15 +61,11 @@ namespace Micronetes.Hosting
                 var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, expandedProject));
                 path = GetExePath(fullProjectPath);
                 workingDirectory = Path.GetDirectoryName(fullProjectPath);
-                // TODO: Requires msbuild
-                applicationName = Path.GetFileNameWithoutExtension(fullProjectPath);
-
                 service.Status.ProjectFilePath = fullProjectPath;
             }
             else
             {
                 var expandedExecutable = Environment.ExpandEnvironmentVariables(serviceDescription.Executable);
-                applicationName = Path.GetFileNameWithoutExtension(expandedExecutable);
                 path = Path.GetFullPath(Path.Combine(application.ContextDirectory, expandedExecutable));
                 workingDirectory = serviceDescription.WorkingDirectory != null ?
                     Path.GetFullPath(Path.Combine(application.ContextDirectory, Environment.ExpandEnvironmentVariables(serviceDescription.WorkingDirectory))) :
@@ -80,7 +75,6 @@ namespace Micronetes.Hosting
             // If this is a dll then use dotnet to run it
             if (Path.GetExtension(path) == ".dll")
             {
-                applicationName = Path.GetFileNameWithoutExtension(path);
                 args = $"\"{path}\" {args}".Trim();
                 path = "dotnet";
             }
@@ -96,6 +90,7 @@ namespace Micronetes.Hosting
 
             if (service.Status.ProjectFilePath != null && service.Description.Build.GetValueOrDefault() && _buildProjects)
             {
+                // Sometimes building can fail because of file locking (like files being open in VS)
                 _logger.LogInformation("Building project {ProjectFile}", service.Status.ProjectFilePath);
 
                 service.Logs.OnNext($"dotnet build \"{service.Status.ProjectFilePath}\" /nologo");

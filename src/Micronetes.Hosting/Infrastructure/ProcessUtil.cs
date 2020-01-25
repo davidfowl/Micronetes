@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -23,7 +22,7 @@ namespace Micronetes.Hosting
             Action<int> onStart = null,
             CancellationToken cancellationToken = default)
         {
-            var process = new Process()
+            using var process = new Process()
             {
                 StartInfo =
                 {
@@ -37,108 +36,106 @@ namespace Micronetes.Hosting
                 EnableRaisingEvents = true
             };
 
-            using (process)
+
+            if (workingDirectory != null)
             {
-                if (workingDirectory != null)
+                process.StartInfo.WorkingDirectory = workingDirectory;
+            }
+
+            if (environmentVariables != null)
+            {
+                foreach (var kvp in environmentVariables)
                 {
-                    process.StartInfo.WorkingDirectory = workingDirectory;
+                    process.StartInfo.Environment.Add(kvp);
                 }
+            }
 
-                if (environmentVariables != null)
+            var outputBuilder = new StringBuilder();
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
                 {
-                    foreach (var kvp in environmentVariables)
+                    if (outputDataReceived != null)
                     {
-                        process.StartInfo.Environment.Add(kvp);
-                    }
-                }
-
-                var outputBuilder = new StringBuilder();
-                process.OutputDataReceived += (_, e) =>
-                {
-                    if (e.Data != null)
-                    {
-                        if (outputDataReceived != null)
-                        {
-                            outputDataReceived.Invoke(e.Data);
-                        }
-                        else
-                        {
-                            outputBuilder.AppendLine(e.Data);
-                        }
-                    }
-                };
-
-                var errorBuilder = new StringBuilder();
-                process.ErrorDataReceived += (_, e) =>
-                {
-                    if (e.Data != null)
-                    {
-                        if (errorDataReceived != null)
-                        {
-                            errorDataReceived.Invoke(e.Data);
-                        }
-                        else if (outputDataReceived != null)
-                        {
-                            outputDataReceived.Invoke(e.Data);
-                        }
-                        else
-                        {
-                            errorBuilder.AppendLine(e.Data);
-                        }
-                    }
-                };
-
-                var tcs = new TaskCompletionSource<ProcessResult>();
-
-                process.Exited += (_, e) =>
-                {
-                    if (throwOnError && process.ExitCode != 0)
-                    {
-                        tcs.TrySetException(new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}"));
+                        outputDataReceived.Invoke(e.Data);
                     }
                     else
                     {
-                        tcs.TrySetResult(new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode));
+                        outputBuilder.AppendLine(e.Data);
                     }
-                };
+                }
+            };
 
-                process.Start();
-                onStart?.Invoke(process.Id);
-
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                var cancelledTcs = new TaskCompletionSource<object>();
-                using var _ = cancellationToken.Register(() => cancelledTcs.TrySetResult(null));
-
-                var result = await Task.WhenAny(tcs.Task, cancelledTcs.Task);
-
-                if (result == cancelledTcs.Task)
+            var errorBuilder = new StringBuilder();
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
                 {
-                    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    if (errorDataReceived != null)
                     {
-                        Syscall.kill(process.Id, Signum.SIGTERM);
-
-                        var cancel = new CancellationTokenSource();
-
-                        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5), cancel.Token));
-                        
-                        cancel.Cancel();
+                        errorDataReceived.Invoke(e.Data);
                     }
+                    else if (outputDataReceived != null)
+                    {
+                        outputDataReceived.Invoke(e.Data);
+                    }
+                    else
+                    {
+                        errorBuilder.AppendLine(e.Data);
+                    }
+                }
+            };
+
+            var processLifetimeTask = new TaskCompletionSource<ProcessResult>();
+
+            process.Exited += (_, e) =>
+            {
+                if (throwOnError && process.ExitCode != 0)
+                {
+                    processLifetimeTask.TrySetException(new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}"));
+                }
+                else
+                {
+                    processLifetimeTask.TrySetResult(new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode));
+                }
+            };
+
+            process.Start();
+            onStart?.Invoke(process.Id);
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            var cancelledTcs = new TaskCompletionSource<object>();
+            using var _ = cancellationToken.Register(() => cancelledTcs.TrySetResult(null));
+
+            var result = await Task.WhenAny(processLifetimeTask.Task, cancelledTcs.Task);
+
+            if (result == cancelledTcs.Task)
+            {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    Syscall.kill(process.Id, Signum.SIGINT);
+
+                    var cancel = new CancellationTokenSource();
+
+                    await Task.WhenAny(processLifetimeTask.Task, Task.Delay(TimeSpan.FromSeconds(5), cancel.Token));
+
+                    cancel.Cancel();
+                }
+
+                if (!process.HasExited)
+                {
+                    process.CloseMainWindow();
 
                     if (!process.HasExited)
                     {
-                        process.CloseMainWindow();
-
-                        if (!process.HasExited)
-                        {
-                            process.Kill();
-                        }
+                        process.Kill();
                     }
                 }
-
-                return await tcs.Task;
             }
+
+            return await processLifetimeTask.Task;
         }
     }
 }

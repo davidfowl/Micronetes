@@ -69,6 +69,7 @@ namespace Micronetes.Hosting
                             StoppingTokenSource = cts,
                             Thread = new Thread(() =>
                             {
+                                // TODO: Finding the application name requires msbuild knowledge
                                 _diagnosticsCollector.ProcessEvents(Path.GetFileNameWithoutExtension(process.Service.Status.ProjectFilePath),
                                                                     process.Service.Description.Name,
                                                                     process.Pid.Value,
