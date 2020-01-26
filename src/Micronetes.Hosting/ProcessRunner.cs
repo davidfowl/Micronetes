@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
-    public class ProcessRunner : IApplicationProcessor
+    public class ProcessRunner : IApplicationProcessor, IReplicaInstantiator
     {
         private readonly ILogger _logger;
         private readonly bool _debugMode;
@@ -262,6 +262,21 @@ namespace Micronetes.Hosting
             }
 
             return Task.WhenAll(tasks);
+        }
+        
+        public ValueTask HandleStaleReplica(ReplicaEvent replicaEvent)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ValueTask<string> SerializeReplica(ReplicaEvent replicaEvent)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ValueTask<ReplicaEvent> DeserializeReplicaEvent(ReplicaEvent replicaEvent)
+        {
+            throw new NotImplementedException();
         }
 
         private static string GetExePath(string projectFilePath)

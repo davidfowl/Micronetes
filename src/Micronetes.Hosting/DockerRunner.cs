@@ -9,10 +9,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Micronetes.Hosting
 {
-    public class DockerRunner : IApplicationProcessor
+    public class DockerRunner : IApplicationProcessor, IReplicaInstantiator
     {
         private readonly ILogger _logger;
-        private readonly RunState _runState;
         private readonly Lazy<Task<bool>> _dockerInstalled = new Lazy<Task<bool>>(DetectDockerInstalled);
 
         private readonly string _fileName = nameof(DockerRunner);
@@ -20,7 +19,6 @@ namespace Micronetes.Hosting
         public DockerRunner(ILogger logger, RunState runState)
         {
             _logger = logger;
-            _runState = runState;
         }
 
         public async Task StartAsync(Application application)
@@ -28,7 +26,6 @@ namespace Micronetes.Hosting
             var tasks = new Task[application.Services.Count];
             var index = 0;
 
-            await CleanPreviousRun();
             foreach (var s in application.Services)
             {
                 tasks[index++] = s.Value.Description.External ? Task.CompletedTask : StartContainerAsync(application, s.Value);
@@ -82,9 +79,6 @@ namespace Micronetes.Hosting
                 var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
                 var status = new DockerStatus(service, replica);
                 service.Replicas[replica] = status;
-
-                // Storing the container name in the run file
-                await WriteReplicaToFile(replica);
 
                 service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Added, status));
 
@@ -256,32 +250,20 @@ namespace Micronetes.Hosting
                 await Task.WhenAll(di.Tasks);
             }
         }
-
-        private async Task WriteReplicaToFile(string replica)
+        
+        public ValueTask HandleStaleReplica(ReplicaEvent replicaEvent)
         {
-            await _runState.AppendFile(_fileName, replica + Environment.NewLine);
+            throw new NotImplementedException();
         }
 
-        private async Task CleanPreviousRun()
+        public ValueTask<string> SerializeReplica(ReplicaEvent replicaEvent)
         {
-            (var hasFile, var contents) = await _runState.GetFile(_fileName);
-            if (hasFile)
-            {
-                var containers = contents.Split(Environment.NewLine);
-                var tasks = new List<Task>(containers.Length);
-                foreach (var container in containers)
-                {
-                    if (!string.IsNullOrEmpty(container.Trim()))
-                    {
-                        tasks.Add(ProcessUtil.RunAsync("docker", $"rm -f {container}",
-                            throwOnError: false,
-                            outputDataReceived: data =>
-                                _logger.LogInformation("removed container {container} from previous run", container)));
-                    }
-                }
+            throw new NotImplementedException();
+        }
 
-                await Task.WhenAll(tasks);
-            }
+        public ValueTask<ReplicaEvent> DeserializeReplicaEvent(ReplicaEvent replicaEvent)
+        {
+            throw new NotImplementedException();
         }
 
         private static async Task<bool> DetectDockerInstalled()
