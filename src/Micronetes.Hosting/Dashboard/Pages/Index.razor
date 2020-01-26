@@ -1,5 +1,6 @@
 ﻿@page "/"
 @inject Application application
+@implements IDisposable
 
 <h1>Services</h1>
 <table class="table">
@@ -15,29 +16,29 @@
         </tr>
     </thead>
     <tbody>
-        @foreach (var service in application.Services)
+        @foreach (var service in application.Services.Values)
         {
-            var logsPath = $"logs/{service.Value.Description.Name}";
-            var servicePath = $"services/{service.Value.Description.Name}";
-            <tr>
-                <td><a href="@servicePath">@service.Value.Description.Name</a></td>
+            var logsPath = $"logs/{service.Description.Name}";
+            var servicePath = $"services/{service.Description.Name}";
+            <tr @key="service.Description.Name">
+                <td><a href="@servicePath">@service.Description.Name</a></td>
                 <td>
-                    @service.Value.ServiceType
+                    @service.ServiceType
                 </td>
                 <td>
-                    @if (service.Value.Description.Project != null)
+                    @if (service.Description.Project != null)
                     {
-                        <p>@service.Value.Description.Project</p>
+                        <p>@service.Description.Project</p>
                     }
-                    else if (service.Value.Description.DockerImage != null)
+                    else if (service.Description.DockerImage != null)
                     {
-                        <p>@service.Value.Description.DockerImage</p>
+                        <p>@service.Description.DockerImage</p>
                     }
                 </td>
                 <td>
-                    @if (service.Value.Description.Bindings.Any())
+                    @if (service.Description.Bindings.Any())
                     {
-                        foreach (var b in service.Value.Description.Bindings)
+                        foreach (var b in service.Description.Bindings)
                         {
                             if (b.Port != null)
                             {
@@ -62,8 +63,8 @@
                         <p>none</p>
                     }
                 </td>
-                <td>@service.Value.Replicas.Count/@service.Value.Description.Replicas</td>
-                <td>@service.Value.Restarts</td>
+                <td>@service.Replicas.Count/@service.Description.Replicas</td>
+                <td>@service.Restarts</td>
                 <td>
                     <NavLink href="@logsPath">View</NavLink>
                 </td>
@@ -73,8 +74,31 @@
 </table>
 
 @code {
+
+    private List<IDisposable> _subscriptions = new List<IDisposable>();
+
     string GetUrl(ServiceBinding b)
     {
         return $"{(b.Protocol ?? "http")}://{b.Host ?? "localhost"}:{b.Port}";
+    }
+
+    protected override void OnInitialized()
+    {
+        foreach (var a in application.Services.Values)
+        {
+            _subscriptions.Add(a.ReplicaEvents.Subscribe(OnReplicaChanged));
+        }
+
+        base.OnInitialized();
+    }
+
+    private void OnReplicaChanged(ReplicaEvent replicaEvent)
+    {
+        InvokeAsync(() => StateHasChanged());
+    }
+
+    void IDisposable.Dispose()
+    {
+        _subscriptions.ForEach(d => d.Dispose());
     }
 }

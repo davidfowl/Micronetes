@@ -18,14 +18,12 @@ namespace Micronetes.Hosting
         private readonly ILogger _logger;
         private readonly bool _debugMode;
         private readonly bool _buildProjects;
-        private DiagnosticsCollector _diagnosticsCollector;
 
-        public ProcessRunner(ILogger logger, ProcessRunnerOptions options, DiagnosticsCollector diagnosticsCollector)
+        public ProcessRunner(ILogger logger, ProcessRunnerOptions options)
         {
             _logger = logger;
             _debugMode = options.DebugMode;
             _buildProjects = options.BuildProjects;
-            _diagnosticsCollector = diagnosticsCollector;
         }
 
         public Task StartAsync(Application application)
@@ -45,13 +43,13 @@ namespace Micronetes.Hosting
             return KillRunningProcesses(application.Services);
         }
 
-        private Task LaunchService(Application application, Service service)
+        private async Task LaunchService(Application application, Service service)
         {
             var serviceDescription = service.Description;
 
             if (serviceDescription.DockerImage != null)
             {
-                return Task.CompletedTask;
+                return;
             }
 
             var serviceName = serviceDescription.Name;
@@ -59,7 +57,6 @@ namespace Micronetes.Hosting
             var path = "";
             var workingDirectory = "";
             var args = service.Description.Args ?? "";
-            var applicationName = "";
 
             if (serviceDescription.Project != null)
             {
@@ -67,15 +64,11 @@ namespace Micronetes.Hosting
                 var fullProjectPath = Path.GetFullPath(Path.Combine(application.ContextDirectory, expandedProject));
                 path = GetExePath(fullProjectPath);
                 workingDirectory = Path.GetDirectoryName(fullProjectPath);
-                // TODO: Requires msbuild
-                applicationName = Path.GetFileNameWithoutExtension(fullProjectPath);
-
                 service.Status.ProjectFilePath = fullProjectPath;
             }
             else
             {
                 var expandedExecutable = Environment.ExpandEnvironmentVariables(serviceDescription.Executable);
-                applicationName = Path.GetFileNameWithoutExtension(expandedExecutable);
                 path = Path.GetFullPath(Path.Combine(application.ContextDirectory, expandedExecutable));
                 workingDirectory = serviceDescription.WorkingDirectory != null ?
                     Path.GetFullPath(Path.Combine(application.ContextDirectory, Environment.ExpandEnvironmentVariables(serviceDescription.WorkingDirectory))) :
@@ -85,7 +78,6 @@ namespace Micronetes.Hosting
             // If this is a dll then use dotnet to run it
             if (Path.GetExtension(path) == ".dll")
             {
-                applicationName = Path.GetFileNameWithoutExtension(path);
                 args = $"\"{path}\" {args}".Trim();
                 path = "dotnet";
             }
@@ -96,27 +88,28 @@ namespace Micronetes.Hosting
 
             var processInfo = new ProcessInfo
             {
-                Threads = new Thread[service.Description.Replicas.Value]
+                Tasks = new Task[service.Description.Replicas.Value]
             };
 
             if (service.Status.ProjectFilePath != null && service.Description.Build.GetValueOrDefault() && _buildProjects)
             {
+                // Sometimes building can fail because of file locking (like files being open in VS)
                 _logger.LogInformation("Building project {ProjectFile}", service.Status.ProjectFilePath);
 
                 service.Logs.OnNext($"dotnet build \"{service.Status.ProjectFilePath}\" /nologo");
 
-                var buildResult = ProcessUtil.Run("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
-                                                 outputDataReceived: data => service.Logs.OnNext(data),
-                                                 throwOnError: false);
+                var buildResult = await ProcessUtil.RunAsync("dotnet", $"build \"{service.Status.ProjectFilePath}\" /nologo",
+                                                            outputDataReceived: data => service.Logs.OnNext(data),
+                                                            throwOnError: false);
 
                 if (buildResult.ExitCode != 0)
                 {
-                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
-                    return Task.CompletedTask;
+                    _logger.LogInformation("Building {ProjectFile} failed with exit code {ExitCode}: " + buildResult.StandardOutput + buildResult.StandardError, service.Status.ProjectFilePath, buildResult.ExitCode);
+                    return;
                 }
             }
 
-            void RunApplication(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
+            async Task RunApplicationAsync(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
 
@@ -147,8 +140,10 @@ namespace Micronetes.Hosting
                 while (!processInfo.StoppedTokenSource.IsCancellationRequested)
                 {
                     var replica = serviceName + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                    var status = new ProcessStatus();
+                    var status = new ProcessStatus(service, replica);
                     service.Replicas[replica] = status;
+
+                    service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Added, status));
 
                     // This isn't your host name
                     environment["APP_INSTANCE"] = replica;
@@ -164,28 +159,11 @@ namespace Micronetes.Hosting
 
                     _logger.LogInformation("Launching service {ServiceName}: {ExePath} {args}", replica, path, args);
 
-                    var metricsTokenSource = CancellationTokenSource.CreateLinkedTokenSource(processInfo.StoppedTokenSource.Token);
-
-                    // This is the thread that will collect diagnostics from the running process
-                    // - Logs - I'll collect structured logs from Microsoft.Extensions.Logging
-                    // - Metrics - It'll collect EventCounters
-                    // - Distribued Traces - It'll create spans
-                    var diagnosticsThread = new Thread(state =>
-                    {
-                        _diagnosticsCollector.ProcessEvents(
-                            applicationName,
-                            service.Description.Name,
-                            (int)state,
-                            replica,
-                            status,
-                            metricsTokenSource.Token);
-                    });
-
                     try
                     {
                         service.Logs.OnNext($"[{replica}]:{path} {args}");
 
-                        var result = ProcessUtil.Run(path, args,
+                        var result = await ProcessUtil.RunAsync(path, args,
                             environmentVariables: environment,
                             workingDirectory: workingDirectory,
                             outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
@@ -202,7 +180,7 @@ namespace Micronetes.Hosting
 
                                 status.Pid = pid;
 
-                                diagnosticsThread.Start(pid);
+                                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Started, status));
                             },
                             throwOnError: false,
                             cancellationToken: processInfo.StoppedTokenSource.Token);
@@ -211,9 +189,7 @@ namespace Micronetes.Hosting
 
                         if (status.Pid != null)
                         {
-                            metricsTokenSource.Cancel();
-
-                            diagnosticsThread.Join();
+                            service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Stopped, status));
                         }
                     }
                     catch (Exception ex)
@@ -232,6 +208,7 @@ namespace Micronetes.Hosting
 
                     // Remove the replica from the set
                     service.Replicas.TryRemove(replica, out _);
+                    service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Removed, status));
                 }
             }
 
@@ -252,39 +229,30 @@ namespace Micronetes.Hosting
                         ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
                     }
 
-                    processInfo.Threads[i] = new Thread(() => RunApplication(ports));
+                    processInfo.Tasks[i] = RunApplicationAsync(ports);
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    processInfo.Threads[i] = new Thread(() => RunApplication(Enumerable.Empty<(int, int, string)>()));
+                    processInfo.Tasks[i] = RunApplicationAsync(Enumerable.Empty<(int, int, string)>());
                 }
             }
 
-            for (int i = 0; i < service.Description.Replicas; i++)
-            {
-                processInfo.Threads[i].Start();
-            }
-
             service.Items[typeof(ProcessInfo)] = processInfo;
-
-            return Task.CompletedTask;
         }
 
         private Task KillRunningProcesses(IDictionary<string, Service> services)
         {
-            static void KillProcess(Service service)
+            static async Task KillProcessAsync(Service service)
             {
                 if (service.Items.TryGetValue(typeof(ProcessInfo), out var stateObj) && stateObj is ProcessInfo state)
                 {
                     // Cancel the token before stopping the process
                     state.StoppedTokenSource.Cancel();
-                    foreach (var t in state.Threads)
-                    {
-                        t.Join();
-                    }
+
+                    await Task.WhenAll(state.Tasks);
                 }
             }
 
@@ -293,7 +261,7 @@ namespace Micronetes.Hosting
             foreach (var s in services.Values)
             {
                 var state = s;
-                tasks[index++] = Task.Run(() => KillProcess(state));
+                tasks[index++] = KillProcessAsync(state);
             }
 
             return Task.WhenAll(tasks);
@@ -347,7 +315,7 @@ namespace Micronetes.Hosting
 
         private class ProcessInfo
         {
-            public Thread[] Threads { get; set; }
+            public Task[] Tasks { get; set; }
 
             public CancellationTokenSource StoppedTokenSource { get; set; } = new CancellationTokenSource();
         }

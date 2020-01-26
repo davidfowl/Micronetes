@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Micronetes.Hosting.Metrics
+namespace Micronetes.Hosting.Diagnostics.Metrics
 {
     internal interface ICounterPayload
     {

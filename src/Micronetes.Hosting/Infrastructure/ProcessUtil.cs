@@ -1,29 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Mono.Unix.Native;
 
 namespace Micronetes.Hosting
 {
     internal static class ProcessUtil
     {
-        public static ProcessResult Run(
+        public static async Task<ProcessResult> RunAsync(
             string filename,
             string arguments,
-            TimeSpan? timeout = null,
             string workingDirectory = null,
             bool throwOnError = true,
             IDictionary<string, string> environmentVariables = null,
             Action<string> outputDataReceived = null,
-            bool log = false,
+            Action<string> errorDataReceived = null,
             Action<int> onStart = null,
             CancellationToken cancellationToken = default)
         {
-            var process = new Process()
+            using var process = new Process()
             {
                 StartInfo =
                 {
@@ -34,138 +33,109 @@ namespace Micronetes.Hosting
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 },
+                EnableRaisingEvents = true
             };
 
-            using (process)
+
+            if (workingDirectory != null)
             {
-                if (workingDirectory != null)
+                process.StartInfo.WorkingDirectory = workingDirectory;
+            }
+
+            if (environmentVariables != null)
+            {
+                foreach (var kvp in environmentVariables)
                 {
-                    process.StartInfo.WorkingDirectory = workingDirectory;
+                    process.StartInfo.Environment.Add(kvp);
                 }
+            }
 
-                if (environmentVariables != null)
+            var outputBuilder = new StringBuilder();
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
                 {
-                    foreach (var kvp in environmentVariables)
+                    if (outputDataReceived != null)
                     {
-                        process.StartInfo.Environment.Add(kvp);
+                        outputDataReceived.Invoke(e.Data);
+                    }
+                    else
+                    {
+                        outputBuilder.AppendLine(e.Data);
                     }
                 }
+            };
 
-                var outputBuilder = new StringBuilder();
-                process.OutputDataReceived += (_, e) =>
+            var errorBuilder = new StringBuilder();
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
                 {
-                    if (e.Data != null)
+                    if (errorDataReceived != null)
                     {
-                        if (outputDataReceived != null)
-                        {
-                            outputDataReceived.Invoke(e.Data);
-                        }
-                        else
-                        {
-                            outputBuilder.AppendLine(e.Data);
-                        }
+                        errorDataReceived.Invoke(e.Data);
                     }
-                };
-
-                var errorBuilder = new StringBuilder();
-                process.ErrorDataReceived += (_, e) =>
-                {
-                    if (e.Data != null)
+                    else if (outputDataReceived != null)
                     {
-                        if (outputDataReceived != null)
-                        {
-                            outputDataReceived.Invoke(e.Data);
-                        }
-                        else
-                        {
-                            errorBuilder.AppendLine(e.Data);
-                        }
+                        outputDataReceived.Invoke(e.Data);
                     }
-                };
-
-                process.Start();
-                onStart?.Invoke(process.Id);
-
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                var start = DateTime.UtcNow;
-
-                while (true)
-                {
-                    if (cancellationToken.IsCancellationRequested)
+                    else
                     {
-                        StopProcess(process);
-                        break;
+                        errorBuilder.AppendLine(e.Data);
                     }
-
-                    if (timeout.HasValue && (DateTime.UtcNow - start > timeout.Value))
-                    {
-                        StopProcess(process);
-                        break;
-                    }
-
-                    if (process.HasExited)
-                    {
-                        break;
-                    }
-
-                    Thread.Sleep(500);
                 }
+            };
 
+            var processLifetimeTask = new TaskCompletionSource<ProcessResult>();
+
+            process.Exited += (_, e) =>
+            {
                 if (throwOnError && process.ExitCode != 0)
                 {
-                    throw new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}");
+                    processLifetimeTask.TrySetException(new InvalidOperationException($"Command {filename} {arguments} returned exit code {process.ExitCode}"));
                 }
-
-                return new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode);
-            }
-        }
-
-        public static void StopProcess(Process process)
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                Mono.Unix.Native.Syscall.kill(process.Id, Mono.Unix.Native.Signum.SIGINT);
-
-                // Tentatively invoke SIGINT
-                var waitForShutdownDelay = Task.Delay(TimeSpan.FromSeconds(5));
-                while (!process.HasExited && !waitForShutdownDelay.IsCompletedSuccessfully)
+                else
                 {
-                    Thread.Sleep(200);
+                    processLifetimeTask.TrySetResult(new ProcessResult(outputBuilder.ToString(), errorBuilder.ToString(), process.ExitCode));
                 }
-            }
+            };
 
-            if (!process.HasExited)
+            process.Start();
+            onStart?.Invoke(process.Id);
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            var cancelledTcs = new TaskCompletionSource<object>();
+            using var _ = cancellationToken.Register(() => cancelledTcs.TrySetResult(null));
+
+            var result = await Task.WhenAny(processLifetimeTask.Task, cancelledTcs.Task);
+
+            if (result == cancelledTcs.Task)
             {
-                // Log.WriteLine($"Forcing process to stop ...");
-                process.CloseMainWindow();
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    Syscall.kill(process.Id, Signum.SIGINT);
+
+                    var cancel = new CancellationTokenSource();
+
+                    await Task.WhenAny(processLifetimeTask.Task, Task.Delay(TimeSpan.FromSeconds(5), cancel.Token));
+
+                    cancel.Cancel();
+                }
 
                 if (!process.HasExited)
                 {
-                    process.Kill();
+                    process.CloseMainWindow();
+
+                    if (!process.HasExited)
+                    {
+                        process.Kill();
+                    }
                 }
-
-                // process.Dispose();
-
-                do
-                {
-                    // Log.WriteLine($"Waiting for process {process.Id} to stop ...");
-
-                    Thread.Sleep(1000);
-
-                    try
-                    {
-                        process = Process.GetProcessById(process.Id);
-                        process.Refresh();
-                    }
-                    catch
-                    {
-                        process = null;
-                    }
-
-                } while (process != null && !process.HasExited);
             }
+
+            return await processLifetimeTask.Task;
         }
     }
 }

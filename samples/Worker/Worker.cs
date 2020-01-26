@@ -3,7 +3,6 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Micronetes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -60,11 +59,10 @@ namespace Worker
             {
                 try
                 {
-                    var uri = _configuration.GetUri("rabbit");
                     var factory = new ConnectionFactory()
                     {
-                        HostName = uri.Host,
-                        Port = uri.Port
+                        HostName = _configuration["service:rabbit:host"],
+                        Port = int.Parse(_configuration["service:rabbit:port"])
                     };
 
                     var connection = factory.CreateConnection();

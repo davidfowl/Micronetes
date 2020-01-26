@@ -13,7 +13,7 @@ else
     <div style="overflow-y: scroll;position: absolute;height: 84%; width:75%; color:white;background-color:black;padding:10px">
         @foreach (var log in ApplicationLogs)
         {
-            <div style="width:100%">@log</div>
+            <div @key="@log.Id" style="width:100%">@log.Text</div>
         }
     </div>
 }
@@ -22,7 +22,7 @@ else
     [Parameter]
     public string ServiceName { get; set; }
 
-    public List<string> ApplicationLogs { get; set; }
+    public List<(string Text, int Id)> ApplicationLogs { get; set; }
 
     private IDisposable _subscription;
 
@@ -31,13 +31,15 @@ else
         // TODO: handle this returning false
         if (application.Services.TryGetValue(ServiceName, out var service))
         {
-            ApplicationLogs = new List<string>(service.CachedLogs);
+            ApplicationLogs = service.CachedLogs.Select((item, index) => (item, index)).ToList();
+            var count = ApplicationLogs.Count;
 
             _subscription = service.Logs.Subscribe(log =>
             {
+                count++;
                 InvokeAsync(() =>
                 {
-                    ApplicationLogs.Add(log);
+                    ApplicationLogs.Add((log, count));
                     StateHasChanged();
                 });
             });

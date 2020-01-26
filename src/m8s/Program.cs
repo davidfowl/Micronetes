@@ -239,15 +239,10 @@ namespace Micronetes.Host
             {
                 context.Console.Error.WriteLine("operation canceled.");
             }
-            else if (exception is TargetInvocationException tae && tae.InnerException is InvalidOperationException e)
+            else if (exception is TargetInvocationException tae)
             {
-                context.Console.Error.WriteLine(e.Message);
+                context.Console.Error.WriteLine(tae.InnerException.Message);
             }
-            //else if (exception is CommandException command)
-            //{
-            //    context.Console.Error.WriteLine($"{context.ParseResult.CommandResult.Name} failed:");
-            //    context.Console.Error.WriteLine($"\t{command.Message}");
-            //}
             else
             {
                 context.Console.Error.WriteLine("unhandled exception: ");
