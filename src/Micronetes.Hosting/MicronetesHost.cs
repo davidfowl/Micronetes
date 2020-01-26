@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Micronetes.Hosting.Diagnostics;
@@ -40,8 +41,9 @@ namespace Micronetes.Hosting
                     // Make sure we don't remove the existing file providers (blazor needs this)
                     o.FileProvider = new CompositeFileProvider(o.FileProvider, fileProvider);
                 });
-
+            
             builder.Services.AddSingleton(application);
+            builder.Services.AddSingleton<RunState>();
 
             using var app = builder.Build();
 
@@ -78,7 +80,7 @@ namespace Micronetes.Hosting
             var processor = new AggregateApplicationProcessor(new IApplicationProcessor[] {
                 new EventPipeDiagnosticsRunner(logger, diagnosticsCollector),
                 new ProxyService(logger),
-                new DockerRunner(logger),
+                new DockerRunner(logger, app.Services.GetRequiredService<RunState>()),
                 new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args)),
             });
 
