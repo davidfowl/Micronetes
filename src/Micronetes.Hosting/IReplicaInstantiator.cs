@@ -5,10 +5,10 @@ namespace Micronetes.Hosting
 {
     public interface IReplicaInstantiator
     {
-        ValueTask HandleStaleReplica(ReplicaEvent replicaEvent);
+        Task HandleStaleReplica(ReplicaEvent replicaEvent);
 
         ValueTask<string> SerializeReplica(ReplicaEvent replicaEvent);
 
-        ValueTask<ReplicaEvent> DeserializeReplicaEvent(ReplicaEvent replicaEvent);
+        ValueTask<ReplicaEvent> DeserializeReplicaEvent(string serializedEvent);
     }
 }

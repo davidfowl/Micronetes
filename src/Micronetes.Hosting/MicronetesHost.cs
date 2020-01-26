@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -43,7 +44,6 @@ namespace Micronetes.Hosting
                 });
             
             builder.Services.AddSingleton(application);
-            builder.Services.AddSingleton<RunState>();
 
             using var app = builder.Build();
 
@@ -77,11 +77,20 @@ namespace Micronetes.Hosting
             // Print out what providers were selected and their values
             diagnosticOptions.DumpDiagnostics(logger);
 
+            var dockerRunner = new DockerRunner(logger);
+            var processRunner = new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args));
+
             var processor = new AggregateApplicationProcessor(new IApplicationProcessor[] {
+                new ReplicaStateRecorder(application, logger, new Dictionary<ServiceType, IReplicaInstantiator>()
+                {
+                    [ServiceType.Container] = dockerRunner,
+                    [ServiceType.Executable] = processRunner,
+                    [ServiceType.Project] = processRunner,
+                }), 
                 new EventPipeDiagnosticsRunner(logger, diagnosticsCollector),
                 new ProxyService(logger),
-                new DockerRunner(logger, app.Services.GetRequiredService<RunState>()),
-                new ProcessRunner(logger, ProcessRunnerOptions.FromArgs(args)),
+                dockerRunner,
+                processRunner,
             });
 
             await app.StartAsync();

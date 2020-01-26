@@ -16,7 +16,7 @@ namespace Micronetes.Hosting
 
         private readonly string _fileName = nameof(DockerRunner);
 
-        public DockerRunner(ILogger logger, RunState runState)
+        public DockerRunner(ILogger logger)
         {
             _logger = logger;
         }
@@ -251,19 +251,24 @@ namespace Micronetes.Hosting
             }
         }
         
-        public ValueTask HandleStaleReplica(ReplicaEvent replicaEvent)
+        public async Task HandleStaleReplica(ReplicaEvent replicaEvent)
         {
-            throw new NotImplementedException();
+            var container = replicaEvent.Replica.Name;
+
+            await ProcessUtil.RunAsync("docker", $"rm -f {container}",
+                throwOnError: false,
+                outputDataReceived: data =>
+                    _logger.LogInformation($"removed container {container} from previous run", container));
         }
 
         public ValueTask<string> SerializeReplica(ReplicaEvent replicaEvent)
         {
-            throw new NotImplementedException();
+            return new ValueTask<string>(replicaEvent.Replica.Name);
         }
 
-        public ValueTask<ReplicaEvent> DeserializeReplicaEvent(ReplicaEvent replicaEvent)
+        public ValueTask<ReplicaEvent> DeserializeReplicaEvent(string serializedEvent)
         {
-            throw new NotImplementedException();
+            return new ValueTask<ReplicaEvent>(new ReplicaEvent(ReplicaState.Started, new DockerStatus(null, serializedEvent)));
         }
 
         private static async Task<bool> DetectDockerInstalled()

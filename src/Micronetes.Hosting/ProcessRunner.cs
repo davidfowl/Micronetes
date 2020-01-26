@@ -264,19 +264,22 @@ namespace Micronetes.Hosting
             return Task.WhenAll(tasks);
         }
         
-        public ValueTask HandleStaleReplica(ReplicaEvent replicaEvent)
+        public Task HandleStaleReplica(ReplicaEvent replicaEvent)
         {
-            throw new NotImplementedException();
+            ProcessUtil.KillProcess(((ProcessStatus) replicaEvent.Replica).Pid.Value);
+            return Task.CompletedTask;
         }
 
         public ValueTask<string> SerializeReplica(ReplicaEvent replicaEvent)
         {
-            throw new NotImplementedException();
+            return new ValueTask<string>(((ProcessStatus) replicaEvent.Replica).Pid.Value.ToString());
         }
 
-        public ValueTask<ReplicaEvent> DeserializeReplicaEvent(ReplicaEvent replicaEvent)
+        public ValueTask<ReplicaEvent> DeserializeReplicaEvent(string serializedEvent)
         {
-            throw new NotImplementedException();
+            var pid = int.Parse(serializedEvent);
+            return new ValueTask<ReplicaEvent>(new ReplicaEvent(ReplicaState.Started,
+                new ProcessStatus(null, null) {Pid = pid}));
         }
 
         private static string GetExePath(string projectFilePath)
