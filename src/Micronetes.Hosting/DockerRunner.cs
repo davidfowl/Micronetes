@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +12,7 @@ namespace Micronetes.Hosting
     public class DockerRunner : IApplicationProcessor
     {
         private readonly ILogger _logger;
+        private readonly Lazy<Task<bool>> _dockerInstalled = new Lazy<Task<bool>>(DetectDockerInstalled);
 
         public DockerRunner(ILogger logger)
         {
@@ -40,17 +40,25 @@ namespace Micronetes.Hosting
             foreach (var s in services.Values)
             {
                 var state = s;
-                tasks[index++] = Task.Run(() => StopContainer(state));
+                tasks[index++] = StopContainerAsync(state);
             }
 
             return Task.WhenAll(tasks);
         }
 
-        private Task StartContainerAsync(Application application, Service service)
+        private async Task StartContainerAsync(Application application, Service service)
         {
             if (service.Description.DockerImage == null)
             {
-                return Task.CompletedTask;
+                return;
+            }
+
+            if (!await _dockerInstalled.Value)
+            {
+                _logger.LogError("Unable to start docker container for service {ServiceName}, Docker is not installed.", service.Description.Name);
+
+                service.Logs.OnNext($"Unable to start docker container for service {service.Description.Name}, Docker is not installed.");
+                return;
             }
 
             var serviceDescription = service.Description;
@@ -58,16 +66,18 @@ namespace Micronetes.Hosting
 
             var dockerInfo = new DockerInformation()
             {
-                Threads = new Thread[service.Description.Replicas.Value]
+                Tasks = new Task[service.Description.Replicas.Value]
             };
 
-            void RunDockerContainer(IEnumerable<(int Port, int BindingPort, string Protocol)> ports)
+            async Task RunDockerContainer(IEnumerable<(int Port, int? InternalPort, int BindingPort, string Protocol)> ports)
             {
                 var hasPorts = ports.Any();
 
                 var replica = service.Description.Name.ToLower() + "_" + Guid.NewGuid().ToString().Substring(0, 10).ToLower();
-                var status = new DockerStatus();
+                var status = new DockerStatus(service, replica);
                 service.Replicas[replica] = status;
+
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Added, status));
 
                 var environment = new Dictionary<string, string>
                 {
@@ -83,10 +93,7 @@ namespace Micronetes.Hosting
                 {
                     status.Ports = ports.Select(p => p.Port);
 
-                    portString = string.Join(" ", ports.Select(p => $"-p {p.Port}:{p.Port}"));
-
-                    // These ports should also be passed in not assuming ASP.NET Core
-                    environment["ASPNETCORE_URLS"] = string.Join(";", ports.Select(p => $"{p.Protocol ?? "http"}://*:{p.Port}"));
+                    portString = string.Join(" ", ports.Select(p => $"-p {p.Port}:{p.InternalPort ?? p.Port}"));
 
                     foreach (var p in ports)
                     {
@@ -110,12 +117,18 @@ namespace Micronetes.Hosting
 
                 status.DockerCommand = command;
 
-                var result = ProcessUtil.Run("docker", command, throwOnError: false, cancellationToken: dockerInfo.StoppingTokenSource.Token);
+                var result = await ProcessUtil.RunAsync(
+                    "docker",
+                    command,
+                    throwOnError: false,
+                    cancellationToken: dockerInfo.StoppingTokenSource.Token,
+                    outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"));
 
                 if (result.ExitCode != 0)
                 {
                     _logger.LogError("docker run failed for {ServiceName} with exit code {ExitCode}:" + result.StandardError, service.Description.Name, result.ExitCode);
                     service.Replicas.TryRemove(replica, out _);
+                    service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Removed, status));
 
                     PrintStdOutAndErr(service, replica, result);
                     return;
@@ -128,7 +141,7 @@ namespace Micronetes.Hosting
                 while (string.IsNullOrEmpty(containerId))
                 {
                     // Try to get the ID of the container
-                    result = ProcessUtil.Run("docker", $"ps --no-trunc -f name={replica} --format " + "{{.ID}}");
+                    result = await ProcessUtil.RunAsync("docker", $"ps --no-trunc -f name={replica} --format " + "{{.ID}}");
 
                     containerId = result.ExitCode == 0 ? result.StandardOutput.Trim() : null;
                 }
@@ -139,40 +152,46 @@ namespace Micronetes.Hosting
 
                 _logger.LogInformation("Running container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Started, status));
+
                 using (new ProcessLogCollector(application, service))
                 {
-                    _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
+                _logger.LogInformation("Collecting docker logs for {ContainerName}.", replica);
 
-                    ProcessUtil.Run("docker", $"logs -f {containerId}",
-                        outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
-                        onStart: pid =>
-                        {
-                            status.DockerLogsPid = pid;
-                        },
-                        throwOnError: false,
-                        cancellationToken: dockerInfo.StoppingTokenSource.Token);
+                await ProcessUtil.RunAsync("docker", $"logs -f {containerId}",
+                    outputDataReceived: data => service.Logs.OnNext($"[{replica}]: {data}"),
+                    onStart: pid =>
+                    {
+                        status.DockerLogsPid = pid;
+                    },
+                    throwOnError: false,
+                    cancellationToken: dockerInfo.StoppingTokenSource.Token);
 
-                    _logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
+                _logger.LogInformation("docker logs collection for {ContainerName} complete with exit code {ExitCode}", replica, result.ExitCode);
 
-                    // Docker has a tendency to hang so we're going to timeout this shutdown process
-                    var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                // Docker has a tendency to hang so we're going to timeout this shutdown process
+                var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-                    _logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
+                _logger.LogInformation("Stopping container {ContainerName} with ID {ContainerId}", replica, shortContainerId);
 
-                    result = ProcessUtil.Run("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+                result = await ProcessUtil.RunAsync("docker", $"stop {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
-                    PrintStdOutAndErr(service, replica, result);
+                PrintStdOutAndErr(service, replica, result);
 
-                    _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Stopped, status));
 
-                    result = ProcessUtil.Run("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
+                _logger.LogInformation("Stopped container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
 
-                    PrintStdOutAndErr(service, replica, result);
+                result = await ProcessUtil.RunAsync("docker", $"rm {containerId}", throwOnError: false, cancellationToken: timeoutCts.Token);
 
-                    _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
+                PrintStdOutAndErr(service, replica, result);
+
+                _logger.LogInformation("Removed container {ContainerName} with ID {ContainerId} exited with {ExitCode}", replica, shortContainerId, result.ExitCode);
                 }
 
                 service.Replicas.TryRemove(replica, out _);
+
+                service.ReplicaEvents.OnNext(new ReplicaEvent(ReplicaState.Removed, status));
             };
 
             if (serviceDescription.Bindings.Count > 0)
@@ -181,7 +200,7 @@ namespace Micronetes.Hosting
                 // port
                 for (int i = 0; i < serviceDescription.Replicas; i++)
                 {
-                    var ports = new List<(int, int, string)>();
+                    var ports = new List<(int, int?, int, string)>();
                     foreach (var binding in serviceDescription.Bindings)
                     {
                         if (binding.Port == null)
@@ -189,28 +208,21 @@ namespace Micronetes.Hosting
                             continue;
                         }
 
-                        ports.Add((service.PortMap[binding.Port.Value][i], binding.Port.Value, binding.Protocol));
+                        ports.Add((service.PortMap[binding.Port.Value][i], binding.InternalPort, binding.Port.Value, binding.Protocol));
                     }
 
-                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(ports));
+                    dockerInfo.Tasks[i] = RunDockerContainer(ports);
                 }
             }
             else
             {
                 for (int i = 0; i < service.Description.Replicas; i++)
                 {
-                    dockerInfo.Threads[i] = new Thread(() => RunDockerContainer(Enumerable.Empty<(int, int, string)>()));
+                    dockerInfo.Tasks[i] = RunDockerContainer(Enumerable.Empty<(int, int?, int, string)>());
                 }
             }
 
-            for (int i = 0; i < service.Description.Replicas; i++)
-            {
-                dockerInfo.Threads[i].Start();
-            }
-
             service.Items[typeof(DockerInformation)] = dockerInfo;
-
-            return Task.CompletedTask;
         }
 
         private static void PrintStdOutAndErr(Service service, string replica, ProcessResult result)
@@ -229,22 +241,35 @@ namespace Micronetes.Hosting
             }
         }
 
-        private void StopContainer(Service service)
+        private async Task StopContainerAsync(Service service)
         {
             if (service.Items.TryGetValue(typeof(DockerInformation), out var value) && value is DockerInformation di)
             {
                 di.StoppingTokenSource.Cancel();
 
-                foreach (var t in di.Threads)
-                {
-                    t.Join();
-                }
+                await Task.WhenAll(di.Tasks);
             }
         }
 
+        private static async Task<bool> DetectDockerInstalled()
+        {
+            // Detect Docker installation
+            try
+            {
+                await ProcessUtil.RunAsync("docker", "version", throwOnError: false);
+                return true;
+            }
+            catch (Exception)
+            {
+                // Unfortunately, process throws
+                return false;
+            }
+        }
+
+
         private class DockerInformation
         {
-            public Thread[] Threads { get; set; }
+            public Task[] Tasks { get; set; }
             public CancellationTokenSource StoppingTokenSource { get; set; } = new CancellationTokenSource();
         }
     }

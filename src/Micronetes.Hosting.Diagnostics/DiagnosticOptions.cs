@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Micronetes.Hosting
+namespace Micronetes.Hosting.Diagnostics
 {
     public class DiagnosticOptions
     {

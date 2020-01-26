@@ -20,12 +20,6 @@ set them up so that they can talk.
 - When developing, you only need to run a small number of applications and dependencies.
 - This should be an on-ramp to running in something like kubernetes because the basic primitives should be very similar (service, replicas, ingress (TBD)).
 
-## So what is it?
-
-This project is broken into 2 loosely coupled components:
-- **The Micronetes CLI** - This is the orchestrator used for development and testing.
-- **The Micronetes SDK** - This adds a layer on top of the naming conventions introduced by the orchestrator.
-
 ## Micronetes CLI
 
 The Micronetes CLI is an orchestrator that coordinates multiple applications running both locally and remotely to make developing easier. Micronetes natively understands .NET Core projects so by default, no extra manifests files are needed. The CLI will use the project's launch settings to know how to run. More advanced scenarios require a manifest that instructs the micronetes CLI what projects to launch.
@@ -171,7 +165,9 @@ It will also be exposed via specific `IConfiguration` keys:
 
 ```
 service:myweb:port=80
+service:myweb:host=localhost
 service:myweb:protocol=http
+service:myweb:management:host=localhost
 service:myweb:management:port=3000
 service:myweb:management:protocol=http
 ```
@@ -185,40 +181,6 @@ Each binding in the list of binding for a particular service is injected into th
 ```
 HTTP_PORT=5005
 HTTPS_PORT=5006
-```
-
-##  The Micronetes SDK
-
-The Micronetes SDK uses the conventions introduced by the orchestrator and introduces primitives that simplify microservice communication. 
-
-### IClientFactory\<TClient\>
-
-As a generialization of [IHttpClientFactory](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/http-requests?view=aspnetcore-3.1) introduced in .NET Core 2.1, the `IClientFactory<TClient>` is a abstraction for a managing the lifetime of any `TClient`. The client name here is de-coupled from the service name.
-
-```C#
-public interface IClientFactory<TClient>
-{
-    TClient CreateClient(string name);
-}
-```
-
-### Service Discovery via IConfiguration
-
-The Micronetes SDK includes extension methods for resolving various addresses of other services:
-
-```C#
-using System;
-
-namespace Microsoft.Extensions.Configuration
-{
-    public static class ConfigurationExtensions
-    {
-        public static Uri GetUri(this IConfiguration configuration, string name);
-        public static string GetHost(this IConfiguration configuration, string name);
-        public static int? GetPort(this IConfiguration configuration, string name);
-        public static string GetProtocol(this IConfiguration configuration, string name);
-    }
-}
 ```
 
 ## Using CI builds

@@ -3,7 +3,7 @@ using System.Collections;
 using System.Runtime.Serialization;
 using System.Text.Json;
 
-namespace Micronetes.Hosting.Logging
+namespace Micronetes.Hosting.Diagnostics.Logging
 {
     internal class LoggerException : Exception
     {

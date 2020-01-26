@@ -14,25 +14,18 @@
 
   <ItemGroup>
     <PackageReference Include="Bedrock.Framework" Version="0.1.38-alpha.gd25d5b37ad" />
-    <PackageReference Include="FeatherHttp" Version="0.1.40-alpha.g03d8989815" />
+    <PackageReference Include="FeatherHttp" Version="0.1.42-alpha.gf06a8747e7" />
     <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="3.1.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.12.0" />
     <PackageReference Include="Mono.Posix.NETStandard" Version="1.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="3.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
-    <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="8.0.1" />
-    <PackageReference Include="Serilog.Sinks.Seq" Version="4.0.0" />
     <PackageReference Include="Sln" Version="0.3.0" />
     <PackageReference Include="YamlDotNet" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="2.0.49" GeneratePathProperty="true" />
-    <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.61701" />
     <PackageReference Include="System.Reactive" Version="4.3.2" />
-    <PackageReference Include="OpenTelemetry" Version="0.2.0-alpha.160" />
-    <PackageReference Include="OpenTelemetry.Exporter.Zipkin" Version="0.2.0-alpha.160" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Micronetes.Hosting.Diagnostics\Micronetes.Hosting.Diagnostics.csproj" />
     <ProjectReference Include="..\Micronetes.Hosting.Runtime\Micronetes.Hosting.Runtime.csproj" />
   </ItemGroup>
 
