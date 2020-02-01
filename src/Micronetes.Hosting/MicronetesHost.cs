@@ -12,7 +12,7 @@ using Serilog.Filters;
 
 namespace Micronetes.Hosting
 {
-    public partial class MicronetesHost
+    public class MicronetesHost
     {
         public static async Task RunAsync(Application application, string[] args)
         {
