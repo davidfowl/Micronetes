@@ -38,7 +38,7 @@
    The dashboard should show the `frontend` application running. You should be able to view the application logs and you should be able to hit navigate to the application in your browser.
 1. Create a back end API that the front end will call.
    ```
-   dotnet new api -n backend
+   dotnet new webapi -n backend
    ```
 1. Change the ports to `5002` and `5003` on the `backend` project in `Properties/launchSettings.json`.
    ```JSON
