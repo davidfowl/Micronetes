@@ -43,6 +43,20 @@ namespace Micronetes.Hosting
 
             builder.Services.AddSingleton(application);
 
+            builder.Services.AddCors(
+                options =>
+                    {
+                        options.AddPolicy(
+                            "default",
+                            policy =>
+                                {
+                                    policy
+                                        .AllowAnyOrigin()
+                                        .AllowAnyHeader()
+                                        .AllowAnyMethod();
+                                });
+                    });
+
             using var app = builder.Build();
 
             var port = app.Configuration["port"] ?? "0";
@@ -50,6 +64,8 @@ namespace Micronetes.Hosting
             app.Listen($"http://127.0.0.1:{port}");
 
             app.UseDeveloperExceptionPage();
+
+            app.UseCors("default");
 
             app.UseStaticFiles();
 
